@@ -12,7 +12,7 @@
     {
       "binding": "DB",
       "database_name": "amath-koth-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "2f75e56a-c683-43f0-b4c3-2ca419a0984d",
       "migrations_dir": "migrations"
     }
   ]
