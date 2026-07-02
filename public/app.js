@@ -157,7 +157,9 @@ function renderTeams() {
   const teams = data.teams.filter((team) => team.is_active);
   const inactiveTeams = data.teams.filter((team) => !team.is_active);
   const kothStarted = data.rounds.some((round) => round.phase === 'koth');
-  const teamRows = (items, inactive = false) => `<div class="table-wrap"><table><thead><tr><th>Seed</th><th>ทีม</th><th>สังกัด</th><th>ผู้เข้าแข่งขัน</th><th>ครูผู้ควบคุม</th><th></th></tr></thead><tbody>${items.map((team) => `<tr class="${inactive ? 'is-muted' : ''}"><td><strong>${team.seed}</strong></td><td><div class="team-title">${escapeHtml(team.name)} <span class="code-pill">${escapeHtml(team.code)}</span>${inactive ? ' <span class="badge archived">ถอนแล้ว</span>' : ''}</div></td><td>${escapeHtml(team.school || '—')}</td><td>${escapeHtml([team.member_1, team.member_2].filter(Boolean).join(' / ') || '—')}</td><td>${escapeHtml(team.coach || '—')}</td><td class="right-align"><div class="button-row" style="justify-content:flex-end"><button class="button ghost small" data-action="edit-team" data-id="${escapeHtml(team.id)}">แก้ไข</button>${inactive ? `<button class="button secondary small" data-action="restore-team" data-id="${escapeHtml(team.id)}">กู้คืน</button>` : `<button class="button ghost small" data-action="delete-team" data-id="${escapeHtml(team.id)}">${kothStarted ? 'ถอนทีม' : 'ลบ'}</button>`}</div></td></tr>`).join('')}</tbody></table></div>`;
+  const matchedTeamIds = new Set(data.matches.flatMap((match) => [match.team_a_id, match.team_b_id].filter(Boolean)));
+  const finalTeamIds = new Set(data.matches.filter((match) => match.status === 'final').flatMap((match) => [match.team_a_id, match.team_b_id].filter(Boolean)));
+  const teamRows = (items, inactive = false) => `<div class="table-wrap"><table><thead><tr><th>Seed</th><th>ทีม</th><th>สังกัด</th><th>ผู้เข้าแข่งขัน</th><th>ครูผู้ควบคุม</th><th></th></tr></thead><tbody>${items.map((team) => `<tr class="${inactive ? 'is-muted' : ''}"><td><strong>${team.seed}</strong></td><td><div class="team-title">${escapeHtml(team.name)} <span class="code-pill">${escapeHtml(team.code)}</span>${inactive ? ' <span class="badge archived">ถอนแล้ว</span>' : ''}</div></td><td>${escapeHtml(team.school || '—')}</td><td>${escapeHtml([team.member_1, team.member_2].filter(Boolean).join(' / ') || '—')}</td><td>${escapeHtml(team.coach || '—')}</td><td class="right-align"><div class="button-row" style="justify-content:flex-end"><button class="button ghost small" data-action="edit-team" data-id="${escapeHtml(team.id)}">แก้ไข</button>${inactive ? `<button class="button secondary small" data-action="restore-team" data-id="${escapeHtml(team.id)}">กู้คืน</button>` : `<button class="button ghost small" data-action="delete-team" data-id="${escapeHtml(team.id)}" data-delete-mode="${finalTeamIds.has(team.id) ? 'withdraw' : matchedTeamIds.has(team.id) ? 'paired' : 'delete'}">${finalTeamIds.has(team.id) ? 'ถอนทีม' : 'ลบ'}</button>`}</div></td></tr>`).join('')}</tbody></table></div>`;
   return `
     ${kothStarted ? '<section class="notice info" style="margin-bottom:16px"><strong>รายการเริ่มแล้ว</strong> ยังเพิ่มทีมใหม่ได้ ทีมใหม่จะเข้ารอบถัดไปหลังรอบที่กำลังแข่งบันทึกผลครบ ส่วนการถอนทีมจะไม่ลบประวัติผลเดิม</section>' : ''}
     <div class="grid grid-2">
@@ -310,11 +312,17 @@ async function handleAction(event) {
   }
   if (action === 'delete-team') {
     const team = state.data?.teams.find((item) => item.id === button.dataset.id);
-    if (!team || !confirm(`ต้องการนำทีม “${team.name}” ออกจากการจับคู่รอบถัดไปใช่หรือไม่? หากทีมมีผลแข่งขันแล้ว ระบบจะเก็บประวัติไว้`)) return;
+    const mode = button.dataset.deleteMode || 'delete';
+    const message = mode === 'withdraw'
+      ? `ต้องการถอนทีม “${team?.name || ''}” ออกจากการจับคู่รอบถัดไปใช่หรือไม่? ระบบจะเก็บประวัติผลเดิมไว้`
+      : mode === 'paired'
+        ? `ทีม “${team?.name || ''}” อยู่ในคู่แข่งขันที่ยังรอผลอยู่ ต้องการลองลบใช่หรือไม่? หากลบไม่ได้ให้ไปแก้คู่แข่งขันของรอบนั้นก่อน`
+        : `ต้องการลบทีม “${team?.name || ''}” ออกจากรายการถาวรใช่หรือไม่?`;
+    if (!team || !confirm(message)) return;
     try {
       const result = await api(`/api/tournaments/${state.selectedId}/teams/${team.id}`, { method: 'DELETE' });
       await refreshAll();
-      notify(result.mode === 'withdrawn' ? 'ถอนทีมแล้ว และยังเก็บประวัติผลเดิมไว้' : 'ลบทีมออกจากรายการแล้ว', 'success');
+      notify(result.mode === 'withdrawn' ? 'ถอนทีมแล้ว และยังเก็บประวัติผลเดิมไว้' : 'ลบทีมออกจากรายการถาวรแล้ว', 'success');
     } catch (error) { notify(error.message, 'error'); }
     return;
   }

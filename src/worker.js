@@ -315,12 +315,24 @@ async function updateTeam(request, env, tournamentId, teamId) {
 
 async function archiveTeam(env, tournamentId, teamId) {
   await ensureTournament(env, tournamentId);
-  const finals = await env.DB.prepare(`SELECT COUNT(*) AS total FROM matches m JOIN rounds r ON r.id=m.round_id
-    WHERE r.tournament_id=? AND (m.team_a_id=? OR m.team_b_id=?) AND m.status='final'`).bind(tournamentId, teamId, teamId).first();
+  const team = await env.DB.prepare('SELECT id FROM teams WHERE id=? AND tournament_id=?').bind(teamId, tournamentId).first();
+  if (!team) return error('ไม่พบทีมนี้', 404);
+  const usage = await env.DB.prepare(`SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN m.status='final' THEN 1 ELSE 0 END) AS final_total
+    FROM matches m JOIN rounds r ON r.id=m.round_id
+    WHERE r.tournament_id=? AND (m.team_a_id=? OR m.team_b_id=?)`).bind(tournamentId, teamId, teamId).first();
+  const matchCount = toInt(usage?.total);
+  const finalCount = toInt(usage?.final_total);
+  if (matchCount === 0) {
+    await env.DB.prepare('DELETE FROM teams WHERE id=? AND tournament_id=?').bind(teamId, tournamentId).run();
+    await audit(env, tournamentId, 'team.delete', { teamId });
+    return json({ ok: true, mode: 'deleted' });
+  }
+  if (finalCount === 0) return error('ทีมนี้อยู่ในคู่แข่งขันที่ยังรอผล กรุณาแก้คู่แข่งขันของรอบนั้นก่อน แล้วจึงลบทีมนี้', 409);
   await env.DB.prepare('UPDATE teams SET is_active=0, updated_at=? WHERE id=? AND tournament_id=?').bind(now(), teamId, tournamentId).run();
-  const hasFinals = toInt(finals?.total) > 0;
-  await audit(env, tournamentId, hasFinals ? 'team.withdraw' : 'team.archive', { teamId, hasFinals });
-  return json({ ok: true, mode: hasFinals ? 'withdrawn' : 'archived' });
+  await audit(env, tournamentId, 'team.withdraw', { teamId, matchCount, finalCount });
+  return json({ ok: true, mode: 'withdrawn' });
 }
 
 async function importTeams(request, env, tournamentId) {
@@ -654,7 +666,7 @@ async function publicTournament(env, code) {
       organizer: bundle.tournament.organizer, venue: bundle.tournament.venue, starts_on: bundle.tournament.starts_on, ends_on: bundle.tournament.ends_on,
       status: bundle.tournament.status
     },
-    standings: bundle.standings.map((row) => ({ rank: row.rank, code: row.code, name: row.name, school: row.school, points: row.points, wins: row.wins, draws: row.draws, losses: row.losses, byes: row.byes, capped_diff: row.capped_diff, points_for: row.points_for })),
+    standings: bundle.standings.map((row) => ({ rank: row.rank, code: row.code, name: row.name, school: row.school, is_active: row.is_active, points: row.points, wins: row.wins, draws: row.draws, losses: row.losses, byes: row.byes, capped_diff: row.capped_diff, points_for: row.points_for })),
     rounds
   });
 }
