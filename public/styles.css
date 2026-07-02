@@ -103,6 +103,8 @@ th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #e7edf4;
 th { background: #f8fbfe; color: #53617a; font-size: 12px; font-weight: 850; letter-spacing: .1px; white-space: nowrap; }
 td { font-size: 13px; }
 tr:last-child td { border-bottom: 0; }
+tr.is-muted td { color: #69778a; background: #fbfcfe; }
+tr.is-muted .team-title { color: #56667b; }
 .rank { width: 44px; font-weight: 900; color: var(--navy); }
 .rank.top-1 { color: #a66a00; background: #fff7dd; }
 .rank.top-2 { color: #53616f; background: #f1f5f8; }

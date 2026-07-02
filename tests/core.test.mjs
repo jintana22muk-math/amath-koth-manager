@@ -34,3 +34,18 @@ test('odd entries produce exactly one BYE', () => {
   assert.equal(result.pairings.filter((x) => x.isBye).length, 1);
   assert.equal(result.pairings.length, 2);
 });
+
+test('withdrawn teams with final matches remain in standings history', () => {
+  const teams = [
+    { id: 'a', code: 'A', name: 'Alpha', is_active: 1, seed: 1 },
+    { id: 'b', code: 'B', name: 'Beta', is_active: 0, seed: 2 }
+  ];
+  const rounds = [{ id: 'r1', phase: 'koth', diff_cap: 250 }];
+  const matches = [
+    { round_id: 'r1', team_a_id: 'a', team_b_id: 'b', score_a: 120, score_b: 90, status: 'final', is_bye: 0 }
+  ];
+  const standings = computeRankings({ teams, rounds, matches });
+  assert.equal(standings.length, 2);
+  assert.equal(standings.find((row) => row.team_id === 'a').points, 2);
+  assert.equal(standings.find((row) => row.team_id === 'b').is_active, false);
+});

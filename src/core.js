@@ -74,8 +74,15 @@ export function rankingComparator(rules) {
  */
 export function computeRankings({ teams = [], rounds = [], matches = [], scoring = DEFAULT_SCORING, rules = DEFAULT_RANKING_RULES }) {
   const cfg = normalizeScoring(scoring);
-  const teamMap = new Map(teams.filter((t) => Number(t.is_active ?? 1) === 1).map((team) => [team.id, team]));
   const roundMap = new Map(rounds.map((round) => [round.id, round]));
+  const rankedTeamIds = new Set(teams.filter((t) => Number(t.is_active ?? 1) === 1).map((team) => team.id));
+  for (const match of matches) {
+    const round = roundMap.get(match.round_id);
+    if (!round || round.phase !== 'koth' || match.status !== 'final') continue;
+    if (match.team_a_id) rankedTeamIds.add(match.team_a_id);
+    if (match.team_b_id) rankedTeamIds.add(match.team_b_id);
+  }
+  const teamMap = new Map(teams.filter((team) => rankedTeamIds.has(team.id)).map((team) => [team.id, team]));
   const rows = new Map();
   for (const team of teamMap.values()) {
     rows.set(team.id, {
@@ -85,6 +92,7 @@ export function computeRankings({ teams = [], rounds = [], matches = [], scoring
       school: team.school || '',
       member_1: team.member_1 || '',
       member_2: team.member_2 || '',
+      is_active: Number(team.is_active ?? 1) === 1,
       seed: toInt(team.seed, 9999),
       points: 0,
       wins: 0,
