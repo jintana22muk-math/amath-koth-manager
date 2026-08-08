@@ -462,15 +462,13 @@ button.action-card { width: 100%; font: inherit; }
 
 @media (max-width: 950px) {
   .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: sticky; top: 0; z-index: 20; height: auto; display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px 16px; padding: 10px 13px; }
-  .sidebar .brand { padding: 0; border: 0; }
-  .sidebar .brand-mark { width: 36px; height: 36px; }
-  .nav-caption, .utility-caption, .sidebar-footer { display: none; }
-  .nav-list { display: flex; gap: 3px; overflow-x: auto; }
-  .nav-link { width: auto; min-height: 38px; flex: 0 0 auto; padding: 8px 10px; font-size: 11px; }
+  .sidebar { position: sticky; top: 0; z-index: 20; height: 56px; display: flex; align-items: center; gap: 5px; overflow-x: auto; overscroll-behavior-x: contain; padding: 8px 10px; border-right: 0; border-bottom: 1px solid #edc9db; box-shadow: 0 6px 20px rgba(155,76,118,.09); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .sidebar .brand, .nav-caption, .utility-caption, .sidebar-footer { display: none; }
+  .nav-list, .utility-nav { display: contents; }
+  .nav-link { width: auto; min-height: 40px; height: 40px; flex: 0 0 auto; padding: 8px 12px; border-radius: 11px; font-size: 11px; line-height: 1.2; white-space: nowrap; }
   .nav-link > span { display: none; }
-  .utility-nav { grid-column: 1 / -1; padding-top: 6px; border-top: 1px solid rgba(117,69,98,.12); }
-  .utility-nav .nav-link { min-height: 30px; padding: 5px 9px; font-size: 9px; }
+  .utility-nav .nav-link { min-height: 40px; height: 40px; padding: 8px 12px; font-size: 11px; }
   .main { padding-top: 22px; }
   .grid-4 { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .dashboard-hero { grid-template-columns: 1fr; }
@@ -487,6 +485,9 @@ button.action-card { width: 100%; font: inherit; }
   body { font-size: 14px; }
   .main { padding: 18px 12px 42px; }
   .topbar { display: grid; gap: 14px; margin-bottom: 19px; }
+  .page-title h2 { font-size: 27px; line-height: 1.25; }
+  .page-title p { font-size: 12px; line-height: 1.55; }
+  .page-title .eyebrow { font-size: 8px; line-height: 1.55; letter-spacing: .11em; }
   .tournament-switch { width: 100%; }
   .workflow { grid-template-columns: repeat(4, minmax(60px,1fr)); }
   .workflow-step { display: grid; justify-items: center; gap: 5px; padding: 10px 5px; text-align: center; }
@@ -557,8 +558,6 @@ button.action-card { width: 100%; font: inherit; }
 }
 
 @media (max-width: 420px) {
-  .sidebar .brand h1, .sidebar .brand small { display: none; }
-  .sidebar { grid-template-columns: auto minmax(0,1fr); }
   .nav-link { font-size: 10px; }
   .workflow-step strong { max-width: 62px; }
   .team-summary { gap: 10px; padding: 14px; }
