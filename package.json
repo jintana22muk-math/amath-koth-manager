@@ -10,8 +10,8 @@
     "db:create": "wrangler d1 create amath-koth-db",
     "db:migrate:local": "wrangler d1 migrations apply amath-koth-db --local",
     "db:migrate": "wrangler d1 migrations apply amath-koth-db --remote",
-    "test": "node --test tests/core.test.mjs tests/documents.test.mjs",
-    "check": "node --check src/core.js && node --check src/documents.js && node --check src/worker.js && node --check public/app.js"
+    "test": "node --test tests/core.test.mjs tests/documents.test.mjs tests/auth.test.mjs tests/worker-auth.test.mjs",
+    "check": "node --check src/core.js && node --check src/documents.js && node --check src/auth.js && node --check src/worker.js && node --check public/app.js"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

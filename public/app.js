@@ -3,6 +3,8 @@ const PUBLIC_CODE = new URLSearchParams(location.search).get('public');
 
 const state = {
   authenticated: false,
+  user: null,
+  admins: [],
   tournaments: [],
   selectedId: localStorage.getItem('amath-koth:selected-tournament') || '',
   data: null,
@@ -24,7 +26,8 @@ const navItems = [
 const utilityNavItems = [
   ['tournaments', 'ทัวร์นาเมนต์ทั้งหมด'],
   ['reports', 'ศูนย์เอกสาร'],
-  ['settings', 'ตั้งค่าทัวร์นาเมนต์']
+  ['settings', 'ตั้งค่าทัวร์นาเมนต์'],
+  ['admins', 'จัดการผู้ดูแล']
 ];
 
 function escapeHtml(value) {
@@ -87,6 +90,12 @@ async function refreshAll() {
   render();
 }
 
+async function loadAdmins() {
+  const response = await api('/api/admins');
+  state.admins = response.admins;
+  state.user = response.current_user;
+}
+
 function pageHeading() {
   const tournament = state.data?.tournament;
   const titles = {
@@ -96,7 +105,8 @@ function pageHeading() {
     koth: ['แข่งขันและบันทึกผล', 'สร้างคู่แข่ง กรอกคะแนน และติดตามงานที่ยังไม่เสร็จในหน้าเดียว'],
     standings: ['อันดับคะแนน', 'ตารางอันดับจะคำนวณใหม่ทันทีเมื่อยืนยันผล'],
     reports: ['ศูนย์เอกสาร', 'นำเข้ารายชื่อ สร้างใบแข่งขัน และส่งออกเอกสารจากข้อมูลชุดเดียว'],
-    settings: ['ตั้งค่าทัวร์นาเมนต์', 'แก้ไขข้อมูลรายการและกติกาคะแนนเมื่อจำเป็น']
+    settings: ['ตั้งค่าทัวร์นาเมนต์', 'แก้ไขข้อมูลรายการและกติกาคะแนนเมื่อจำเป็น'],
+    admins: ['จัดการผู้ดูแล', 'เพิ่มผู้ช่วยจัดการแข่งขันและควบคุมบัญชีที่เข้าใช้งานระบบ']
   };
   const [title, subtitle] = titles[state.view] || titles.dashboard;
   return `<div class="topbar"><div class="page-title"><span class="eyebrow">ระบบจัดการแข่งขัน A-Math · คิงออฟเดอะฮิลล์ (KOTH)</span><h2>${title}</h2><p>${subtitle}</p></div>${tournament ? tournamentPicker() : '<button class="button primary" data-action="new-tournament">สร้างทัวร์นาเมนต์</button>'}</div>`;
@@ -289,6 +299,12 @@ function renderSettings() {
   return `<form data-form="update-tournament" class="settings-form"><section class="card settings-section"><header><span class="settings-number">1</span><div><h3>ข้อมูลทัวร์นาเมนต์</h3><p>ชื่อ ปี สถานที่ และจำนวนเกมที่วางแผน</p></div></header><div class="form-grid">${tournamentForm('settings-embedded', t).replace(/^<form[^>]*>|<\/form>$/g, '')}</div></section><section class="card settings-section"><header><span class="settings-number">2</span><div><h3>กติกาคะแนน</h3><p>ค่าเริ่มต้นเหมาะกับการแข่งขันทั่วไป เปลี่ยนเมื่อกติกาของงานกำหนดไว้ต่างออกไป</p></div></header><div class="notice warning"><strong>การแก้กติกาจะคำนวณอันดับใหม่ทันที</strong><span> ผลการแข่งขันเดิมจะไม่หาย</span></div><div class="form-grid settings-fields"><div class="field"><label>ชนะ</label><input type="number" name="win_points" value="${s.win_points}" /><small>คะแนน</small></div><div class="field"><label>เสมอ</label><input type="number" name="draw_points" value="${s.draw_points}" /><small>คะแนน</small></div><div class="field"><label>แพ้</label><input type="number" name="loss_points" value="${s.loss_points}" /><small>คะแนน</small></div><div class="field"><label>พักการแข่งขัน (BYE)</label><input type="number" name="bye_points" value="${s.bye_points}" /><small>คะแนน</small></div><div class="field"><label>เพดานผลต่างมาตรฐาน</label><input type="number" min="0" name="default_diff_cap" value="${s.default_diff_cap}" /></div><div class="field wide"><label>เพดานแต่ละเกม</label><input name="round_caps" value="${escapeHtml(s.round_caps.join(', '))}" /><small>คั่นแต่ละเกมด้วยเครื่องหมายจุลภาค เช่น 250, 250, 250, 200</small></div><div class="field full"><label>เกณฑ์เรียงอันดับ</label><select name="ranking_order"><option value="points,capped_diff,points_for,wins,name" ${t.ranking_rules.join(',') === 'points,capped_diff,points_for,wins,name' ? 'selected' : ''}>คะแนน → ผลต่างคะแนน → แต้มได้ → จำนวนชนะ → ชื่อทีม</option><option value="points,capped_diff,wins,points_for,name" ${t.ranking_rules.join(',') === 'points,capped_diff,wins,points_for,name' ? 'selected' : ''}>คะแนน → ผลต่างคะแนน → จำนวนชนะ → แต้มได้ → ชื่อทีม</option></select></div></div></section><section class="card settings-section publish-setting"><header><span class="settings-number">3</span><div><h3>การเผยแพร่</h3><p>เปิดเมื่อพร้อมให้ผู้ชมดูอันดับและผลการแข่งขัน</p></div></header><label class="toggle-field"><input type="checkbox" name="public_enabled" ${t.public_enabled ? 'checked' : ''} /><span class="toggle-ui"></span><span><strong>เปิดตารางคะแนนสาธารณะ</strong><small>ผู้ชมดูได้อย่างเดียว ไม่สามารถแก้ไขข้อมูล</small></span></label></section><div class="settings-save"><button class="button primary" type="submit">บันทึกการเปลี่ยนแปลง</button><span>การตั้งค่ามีผลกับทัวร์นาเมนต์นี้เท่านั้น</span></div></form>`;
 }
 
+function renderAdmins() {
+  const currentId = state.user?.id;
+  const rows = state.admins.map((admin) => `<article class="admin-row card"><div class="admin-avatar">${escapeHtml((admin.display_name || admin.username).slice(0, 1).toUpperCase())}</div><div class="admin-identity"><div><strong>${escapeHtml(admin.display_name)}</strong>${admin.id === currentId ? '<span class="badge open">บัญชีของคุณ</span>' : ''}${admin.is_system ? '<span class="badge system">ผู้ดูแลหลัก</span>' : ''}</div><span>ชื่อผู้ใช้: ${escapeHtml(admin.username)}</span><small>${admin.is_system ? 'บัญชีหลักจากการตั้งค่าระบบ ไม่สามารถลบจากหน้านี้ได้' : `เพิ่มเมื่อ ${escapeHtml(new Date(admin.created_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }))}`}</small></div><div class="admin-actions"><button class="button danger-outline small" data-action="delete-admin" data-id="${escapeHtml(admin.id)}" data-name="${escapeHtml(admin.display_name)}" ${admin.is_system || admin.id === currentId ? 'disabled' : ''}>ลบผู้ดูแล</button></div></article>`).join('');
+  return `<section class="admin-overview"><div><strong>${state.admins.length}</strong><span>บัญชีผู้ดูแลที่เข้าใช้งานได้</span></div><p>ผู้ดูแลทุกคนสามารถจัดการทัวร์นาเมนต์ ทีม ผลการแข่งขัน เอกสาร และบัญชีผู้ดูแลได้เท่ากัน</p></section><div class="admin-layout"><section class="admin-list"><div class="section-head"><div><span class="section-kicker">บัญชีที่ใช้งานได้</span><h3>รายชื่อผู้ดูแล</h3><p>บัญชีที่ถูกลบจะออกจากระบบทันทีและไม่สามารถเข้าสู่ระบบได้อีก</p></div></div>${rows || '<section class="card empty"><h3>ยังไม่มีบัญชีผู้ดูแล</h3></section>'}</section><section class="card admin-create"><span class="section-kicker">เพิ่มผู้ดูแล</span><h3>สร้างบัญชีใหม่</h3><p>ตั้งชื่อผู้ใช้ที่จำง่ายและส่งรหัสผ่านให้เจ้าของบัญชีผ่านช่องทางส่วนตัว</p><form data-form="create-admin" class="form-grid"><div class="field full"><label>ชื่อที่ใช้แสดง</label><input name="display_name" required maxlength="120" placeholder="เช่น ครูจินตนา" /></div><div class="field full"><label>ชื่อผู้ใช้ (Username)</label><input name="username" required minlength="3" maxlength="40" pattern="[a-z0-9][a-z0-9._-]{2,39}" autocomplete="off" placeholder="เช่น jintana" /><small>ใช้ตัวอักษรอังกฤษพิมพ์เล็ก ตัวเลข จุด ขีดกลาง หรือขีดล่าง</small></div><div class="field full"><label>รหัสผ่าน</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="อย่างน้อย 10 ตัวอักษร" /></div><div class="field full"><label>ยืนยันรหัสผ่าน</label><input type="password" name="confirm_password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="พิมพ์รหัสผ่านเดิมอีกครั้ง" /></div><div class="field full"><button class="button primary" type="submit">เพิ่มผู้ดูแล</button></div></form><p class="admin-security-note">รหัสผ่านจะถูกแปลงเป็นค่าที่อ่านย้อนกลับไม่ได้ก่อนจัดเก็บ และจะไม่แสดงบนหน้าจอนี้ภายหลัง</p></section></div>`;
+}
+
 function renderView() {
   switch (state.view) {
     case 'tournaments': return renderTournaments();
@@ -297,6 +313,7 @@ function renderView() {
     case 'standings': return renderStandings();
     case 'reports': return renderReports();
     case 'settings': return renderSettings();
+    case 'admins': return renderAdmins();
     default: return renderDashboard();
   }
 }
@@ -312,13 +329,13 @@ function renderToasts() {
 }
 
 function renderLogin() {
-  app.innerHTML = `<main class="login-screen"><section class="login-intro"><div class="brand-mark">A<span>MATH</span></div><span class="eyebrow">ระบบจัดการแข่งขัน</span><h1>จัดการแข่งขันให้ไหลลื่น<br>ตั้งแต่ทีมแรกถึงแชมป์</h1><p>ระบบจัด A-Math แบบคิงออฟเดอะฮิลล์ (King of the Hill) ที่พาผู้จัดทำงานตามลำดับ ลดการหลงหน้าและลดความผิดพลาดระหว่างแข่งขัน</p><div class="login-points"><span><b>1</b> เตรียมทีม</span><span><b>2</b> แข่งขัน</span><span><b>3</b> ประกาศผล</span></div></section><section class="login-card"><div><span class="eyebrow">ผู้จัดการแข่งขัน</span><h2>เข้าสู่ระบบ</h2><p>ใช้รหัสผ่านสำหรับผู้ดูแลระบบ</p></div><form data-form="login"><div class="field full"><label>รหัสผ่าน</label><input type="password" name="password" required autofocus autocomplete="current-password" placeholder="กรอกรหัสผ่านผู้ดูแล" /></div><button class="button primary" type="submit">เข้าสู่ศูนย์ควบคุม <span aria-hidden="true">→</span></button></form><details class="login-help"><summary>เพิ่งติดตั้งระบบครั้งแรก?</summary><p>กำหนดค่ารหัสผ่านผู้ดูแล <code>ADMIN_PASSWORD</code> และกุญแจรักษาความปลอดภัย <code>AUTH_SECRET</code> บน Cloudflare (ระบบให้บริการเว็บ) ก่อนเข้าสู่ระบบ</p></details></section></main>`;
+  app.innerHTML = `<main class="login-screen"><section class="login-intro"><div class="brand-mark">A<span>MATH</span></div><span class="eyebrow">ระบบจัดการแข่งขัน</span><h1>จัดการแข่งขันให้ไหลลื่น<br>ตั้งแต่ทีมแรกถึงแชมป์</h1><p>ระบบจัด A-Math แบบคิงออฟเดอะฮิลล์ (King of the Hill) ที่พาผู้จัดทำงานตามลำดับ ลดการหลงหน้าและลดความผิดพลาดระหว่างแข่งขัน</p><div class="login-points"><span><b>1</b> เตรียมทีม</span><span><b>2</b> แข่งขัน</span><span><b>3</b> ประกาศผล</span></div></section><section class="login-card"><div><span class="eyebrow">ผู้จัดการแข่งขัน</span><h2>เข้าสู่ระบบ</h2><p>กรอกชื่อผู้ใช้และรหัสผ่านของผู้ดูแล</p></div><form data-form="login"><div class="field full"><label>ชื่อผู้ใช้</label><input name="username" required autofocus autocomplete="username" value="admin" placeholder="กรอกชื่อผู้ใช้" /></div><div class="field full"><label>รหัสผ่าน</label><input type="password" name="password" required autocomplete="current-password" placeholder="กรอกรหัสผ่านผู้ดูแล" /></div><button class="button primary" type="submit">เข้าสู่ศูนย์ควบคุม <span aria-hidden="true">→</span></button></form><details class="login-help"><summary>เพิ่งติดตั้งระบบครั้งแรก?</summary><p>บัญชีหลักใช้ชื่อผู้ใช้ <strong>admin</strong> และรหัสผ่านจากค่า <code>ADMIN_PASSWORD</code> พร้อมกำหนดกุญแจรักษาความปลอดภัย <code>AUTH_SECRET</code> บน Cloudflare (ระบบให้บริการเว็บ)</p></details></section></main>`;
 }
 
 function render() {
   if (!state.authenticated) { renderLogin(); return; }
   const tournament = state.data?.tournament;
-  app.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">A<span>MATH</span></div><div><h1>ศูนย์จัดการแข่งขัน</h1><small>คิงออฟเดอะฮิลล์ (KOTH)</small></div></div><div class="nav-caption">ลำดับการทำงาน</div><nav class="nav-list">${navItems.map(([id, label, number]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}><span>${number}</span>${label}</button>`).join('')}</nav><div class="nav-caption utility-caption">จัดการระบบ</div><nav class="nav-list utility-nav">${utilityNavItems.map(([id, label]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}>${label}</button>`).join('')}</nav><div class="sidebar-footer">${tournament ? `<span class="sidebar-status"><i class="${escapeHtml(tournament.status)}"></i>${tournament.status === 'draft' ? 'กำลังเตรียมรายการ' : tournament.status === 'open' ? 'กำลังแข่งขัน' : 'รายการเสร็จสิ้น'}</span>` : ''}<button data-action="logout">ออกจากระบบ</button></div></aside><main class="main">${pageHeading()}${renderView()}</main></div>${renderModal()}${renderToasts()}`;
+  app.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">A<span>MATH</span></div><div><h1>ศูนย์จัดการแข่งขัน</h1><small>คิงออฟเดอะฮิลล์ (KOTH)</small></div></div><div class="nav-caption">ลำดับการทำงาน</div><nav class="nav-list">${navItems.map(([id, label, number]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}><span>${number}</span>${label}</button>`).join('')}</nav><div class="nav-caption utility-caption">จัดการระบบ</div><nav class="nav-list utility-nav">${utilityNavItems.map(([id, label]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}>${label}</button>`).join('')}</nav><div class="sidebar-footer">${tournament ? `<span class="sidebar-status"><i class="${escapeHtml(tournament.status)}"></i>${tournament.status === 'draft' ? 'กำลังเตรียมรายการ' : tournament.status === 'open' ? 'กำลังแข่งขัน' : 'รายการเสร็จสิ้น'}</span>` : ''}<div class="sidebar-user"><strong>${escapeHtml(state.user?.display_name || 'ผู้ดูแล')}</strong><span>@${escapeHtml(state.user?.username || 'admin')}</span></div><button data-action="logout">ออกจากระบบ</button></div></aside><main class="main">${pageHeading()}${renderView()}</main></div>${renderModal()}${renderToasts()}`;
 }
 
 function editTeamModal(team) {
@@ -491,7 +508,14 @@ async function handleAction(event) {
   if (!button) return;
   const action = button.dataset.action;
   if (action === 'close-modal-bg' && event.target !== button) return;
-  if (action === 'nav') { state.view = button.dataset.view; render(); return; }
+  if (action === 'nav') {
+    state.view = button.dataset.view;
+    if (state.view === 'admins') {
+      try { await loadAdmins(); } catch (error) { notify(error.message, 'error'); return; }
+    }
+    render();
+    return;
+  }
   if (action === 'go-tournaments') { state.view = 'tournaments'; render(); return; }
   if (action === 'go-teams') { state.view = 'teams'; render(); return; }
   if (action === 'go-koth') { state.view = 'koth'; render(); return; }
@@ -500,6 +524,16 @@ async function handleAction(event) {
   if (action === 'delete-tournament') {
     const tournament = state.tournaments.find((item) => item.id === button.dataset.id);
     if (tournament) deleteTournamentModal(tournament);
+    return;
+  }
+  if (action === 'delete-admin') {
+    if (!confirm(`ต้องการลบผู้ดูแล “${button.dataset.name || ''}” ใช่หรือไม่? บัญชีนี้จะออกจากระบบและเข้าใช้งานไม่ได้ทันที`)) return;
+    try {
+      const response = await api(`/api/admins/${encodeURIComponent(button.dataset.id)}`, { method: 'DELETE' });
+      await loadAdmins();
+      render();
+      notify(`ลบผู้ดูแล “${response.deleted.display_name}” แล้ว`, 'success');
+    } catch (error) { notify(error.message, 'error'); }
     return;
   }
   if (action === 'import-docx') { openDocxImport(); return; }
@@ -546,7 +580,7 @@ async function handleAction(event) {
   if (action === 'copy-public') { try { await navigator.clipboard.writeText(`${location.origin}${location.pathname}?public=${encodeURIComponent(state.data.tournament.code)}`); notify('คัดลอกลิงก์แล้ว', 'success'); } catch { notify('คัดลอกลิงก์ไม่สำเร็จ กรุณาคัดลอกจากช่องข้อความ', 'error'); } return; }
   if (action === 'print') { window.print(); return; }
   if (action === 'close-modal' || action === 'close-modal-bg') { state.modal = null; render(); return; }
-  if (action === 'logout') { try { await api('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) }); } finally { state.authenticated = false; state.data = null; state.modal = null; render(); } }
+  if (action === 'logout') { try { await api('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) }); } finally { state.authenticated = false; state.user = null; state.admins = []; state.data = null; state.modal = null; render(); } }
 }
 
 async function handleSubmit(event) {
@@ -558,8 +592,20 @@ async function handleSubmit(event) {
   const bool = (name) => form.querySelector(`[name="${name}"]`)?.checked ?? false;
   try {
     if (kind === 'login') {
-      await api('/api/auth/login', { method: 'POST', body: JSON.stringify(values) });
-      state.authenticated = true; await refreshAll(); notify('เข้าสู่ระบบแล้ว', 'success'); return;
+      const response = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(values) });
+      state.authenticated = true; state.user = response.user; await refreshAll(); notify('เข้าสู่ระบบแล้ว', 'success'); return;
+    }
+    if (kind === 'create-admin') {
+      if (values.password !== values.confirm_password) throw new Error('รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน');
+      const response = await api('/api/admins', {
+        method: 'POST',
+        body: JSON.stringify({ username: values.username, display_name: values.display_name, password: values.password })
+      });
+      form.reset();
+      await loadAdmins();
+      render();
+      notify(`เพิ่มผู้ดูแล “${response.admin.display_name}” แล้ว`, 'success');
+      return;
     }
     if (kind === 'create-tournament') {
       const response = await api('/api/tournaments', { method: 'POST', body: JSON.stringify(values) });
@@ -710,6 +756,7 @@ async function bootstrap() {
   try {
     const auth = await api('/api/auth/me');
     state.authenticated = Boolean(auth.authenticated);
+    state.user = auth.user || null;
     if (state.authenticated) await refreshAll(); else render();
   } catch (error) {
     state.authenticated = false;

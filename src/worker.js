@@ -10,6 +10,13 @@ import {
   toInt
 } from './core.js';
 import { parseDocxRegistration } from './documents.js';
+import {
+  hashPassword,
+  normalizeAdminUsername,
+  normalizePassword,
+  validateAdminUsername,
+  verifyPassword
+} from './auth.js';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -82,8 +89,33 @@ function constantTimeEqual(left, right) {
   return mismatch === 0;
 }
 
-async function makeSession(env) {
-  const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify({ role: 'admin', exp: Date.now() + SESSION_TTL_SECONDS * 1000 })));
+function environmentAdmin() {
+  return { id: 'env-admin', username: 'admin', display_name: 'ผู้ดูแลหลัก', role: 'admin', source: 'environment', is_system: true };
+}
+
+function asAdminUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username,
+    display_name: row.display_name,
+    role: 'admin',
+    source: 'database',
+    is_system: false,
+    created_at: row.created_at
+  };
+}
+
+async function makeSession(env, user) {
+  const claims = {
+    role: 'admin',
+    sub: user.id,
+    username: user.username,
+    display_name: user.display_name,
+    source: user.source,
+    exp: Date.now() + SESSION_TTL_SECONDS * 1000
+  };
+  const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify(claims)));
   const signature = await hmac(payload, env.AUTH_SECRET);
   return `${payload}.${signature}`;
 }
@@ -97,7 +129,12 @@ async function verifySession(request, env) {
   if (!constantTimeEqual(signature, expected)) return false;
   try {
     const data = JSON.parse(base64UrlToText(payload));
-    return data.role === 'admin' && Number(data.exp) > Date.now();
+    if (data.role !== 'admin' || Number(data.exp) <= Date.now()) return false;
+    if (data.source === 'database' && data.sub) {
+      const record = await env.DB.prepare('SELECT id, username, display_name, created_at FROM admin_users WHERE id = ? AND is_active = 1').bind(data.sub).first();
+      return asAdminUser(record) || false;
+    }
+    return env.ADMIN_PASSWORD ? environmentAdmin() : false;
   } catch {
     return false;
   }
@@ -109,11 +146,6 @@ function sessionCookie(token) {
 
 function clearSessionCookie() {
   return 'session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
-}
-
-async function requireAuth(request, env) {
-  if (!(await verifySession(request, env))) return error('กรุณาเข้าสู่ระบบผู้ดูแล', 401);
-  return null;
 }
 
 function asTournament(row) {
@@ -849,12 +881,80 @@ async function publicTournament(env, code) {
   });
 }
 
-async function login(request, env) {
-  if (!env.ADMIN_PASSWORD || !env.AUTH_SECRET) return error('ยังไม่ได้กำหนด ADMIN_PASSWORD และ AUTH_SECRET บน Cloudflare', 503);
+async function listAdmins(env, currentUser) {
+  const query = await env.DB.prepare('SELECT id, username, display_name, created_at FROM admin_users WHERE is_active = 1 ORDER BY created_at ASC, username ASC').all();
+  const admins = query.results.map(asAdminUser);
+  if (env.ADMIN_PASSWORD) admins.unshift(environmentAdmin());
+  return json({ ok: true, admins, current_user: currentUser });
+}
+
+async function createAdmin(request, env, currentUser) {
   const input = await bodyJson(request);
-  if (!constantTimeEqual(safeString(input.password, 300), env.ADMIN_PASSWORD)) return error('รหัสผ่านไม่ถูกต้อง', 401);
-  const token = await makeSession(env);
-  return json({ ok: true, user: { role: 'admin' } }, 200, { 'set-cookie': sessionCookie(token) });
+  const username = normalizeAdminUsername(input.username);
+  const displayName = safeString(input.display_name, 120);
+  const password = normalizePassword(input.password);
+
+  if (!validateAdminUsername(username)) return error('ชื่อผู้ใช้ต้องมี 3–40 ตัว และใช้ได้เฉพาะ a-z, 0-9, จุด ขีดกลาง หรือขีดล่าง');
+  if (username === 'admin') return error('ชื่อผู้ใช้ admin สงวนไว้สำหรับผู้ดูแลหลัก');
+  if (!displayName) return error('กรุณาระบุชื่อที่ใช้แสดง');
+  if (password.length < 10) return error('รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร');
+  const existing = await env.DB.prepare('SELECT id FROM admin_users WHERE username = ? COLLATE NOCASE').bind(username).first();
+  if (existing) return error('ชื่อผู้ใช้นี้มีอยู่แล้ว');
+
+  const passwordRecord = await hashPassword(password);
+  const adminId = id();
+  await env.DB.prepare(`INSERT INTO admin_users (
+    id, username, display_name, password_hash, password_salt, password_iterations, is_active, created_by, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+    .bind(
+      adminId,
+      username,
+      displayName,
+      passwordRecord.hash,
+      passwordRecord.salt,
+      passwordRecord.iterations,
+      currentUser.username,
+      now()
+    ).run();
+  await audit(env, null, 'admin.create', { admin_id: adminId, username, display_name: displayName, created_by: currentUser.username });
+  const created = await env.DB.prepare('SELECT id, username, display_name, created_at FROM admin_users WHERE id = ?').bind(adminId).first();
+  return json({ ok: true, admin: asAdminUser(created) }, 201);
+}
+
+async function deleteAdmin(env, adminId, currentUser) {
+  if (adminId === 'env-admin') return error('ไม่สามารถลบผู้ดูแลหลักของระบบได้');
+  if (adminId === currentUser.id) return error('ไม่สามารถลบบัญชีที่กำลังใช้งานอยู่ได้');
+  const target = await env.DB.prepare('SELECT id, username, display_name FROM admin_users WHERE id = ? AND is_active = 1').bind(adminId).first();
+  if (!target) return error('ไม่พบบัญชีผู้ดูแลนี้', 404);
+  if (!env.ADMIN_PASSWORD) {
+    const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM admin_users WHERE is_active = 1').first();
+    if (toInt(count?.total) <= 1) return error('ต้องเหลือผู้ดูแลอย่างน้อย 1 บัญชี');
+  }
+  await env.DB.prepare('DELETE FROM admin_users WHERE id = ?').bind(adminId).run();
+  await audit(env, null, 'admin.delete', { admin_id: adminId, username: target.username, display_name: target.display_name, deleted_by: currentUser.username });
+  return json({ ok: true, deleted: { id: adminId, username: target.username, display_name: target.display_name } });
+}
+
+async function login(request, env) {
+  if (!env.AUTH_SECRET) return error('ยังไม่ได้กำหนด AUTH_SECRET บน Cloudflare', 503);
+  const input = await bodyJson(request);
+  const username = normalizeAdminUsername(input.username || 'admin');
+  const password = normalizePassword(input.password);
+  let user = null;
+
+  try {
+    const record = await env.DB.prepare('SELECT * FROM admin_users WHERE username = ? COLLATE NOCASE AND is_active = 1').bind(username).first();
+    if (record && await verifyPassword(password, record)) user = asAdminUser(record);
+  } catch (cause) {
+    console.warn('Admin table is not ready; using environment administrator fallback', cause);
+  }
+
+  if (!user && username === 'admin' && env.ADMIN_PASSWORD && constantTimeEqual(password, env.ADMIN_PASSWORD)) {
+    user = environmentAdmin();
+  }
+  if (!user) return error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 401);
+  const token = await makeSession(env, user);
+  return json({ ok: true, user }, 200, { 'set-cookie': sessionCookie(token) });
 }
 
 function notFound() {
@@ -870,11 +970,17 @@ export default {
       if (request.method === 'GET' && path === '/api/health') return json({ ok: true, service: 'A-Math KOTH Manager', time: now() });
       if (request.method === 'POST' && path === '/api/auth/login') return login(request, env);
       if (request.method === 'POST' && path === '/api/auth/logout') return json({ ok: true }, 200, { 'set-cookie': clearSessionCookie() });
-      if (request.method === 'GET' && path === '/api/auth/me') return json({ ok: true, authenticated: await verifySession(request, env), user: (await verifySession(request, env)) ? { role: 'admin' } : null });
+      if (request.method === 'GET' && path === '/api/auth/me') {
+        const user = await verifySession(request, env);
+        return json({ ok: true, authenticated: Boolean(user), user: user || null });
+      }
       if (request.method === 'GET' && path.startsWith('/api/public/tournaments/')) return publicTournament(env, decodeURIComponent(path.split('/').at(-1)));
 
-      const denied = await requireAuth(request, env);
-      if (denied) return denied;
+      const currentUser = await verifySession(request, env);
+      if (!currentUser) return error('กรุณาเข้าสู่ระบบผู้ดูแล', 401);
+
+      if (request.method === 'GET' && path === '/api/admins') return listAdmins(env, currentUser);
+      if (request.method === 'POST' && path === '/api/admins') return createAdmin(request, env, currentUser);
 
       if (request.method === 'GET' && path === '/api/tournaments') return json({ ok: true, tournaments: await listTournaments(env) });
       if (request.method === 'POST' && path === '/api/tournaments') return createTournament(request, env);
@@ -883,6 +989,9 @@ export default {
       if (request.method === 'POST' && path === '/api/documents/docx/commit') return commitDocxImport(request, env);
 
       const parts = path.split('/').filter(Boolean);
+      if (parts[1] === 'admins' && parts[2] && parts.length === 3 && request.method === 'DELETE') {
+        return deleteAdmin(env, decodeURIComponent(parts[2]), currentUser);
+      }
       // /api/tournaments/:id
       if (parts[1] === 'tournaments' && parts[2]) {
         const tournamentId = decodeURIComponent(parts[2]);

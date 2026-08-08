@@ -85,6 +85,9 @@ code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size
 .sidebar-status i.open { background: var(--lime); }
 .sidebar-status i.completed { background: #9fb2b0; }
 .sidebar-footer button { width: fit-content; border: 0; padding: 0; color: #70455d; background: transparent; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.sidebar-user { display: grid; gap: 1px; padding: 9px 10px; border-radius: 11px; background: rgba(255,255,255,.48); }
+.sidebar-user strong { overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-user span { overflow: hidden; color: #9b6c85; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
 .main { min-width: 0; padding: 32px clamp(24px, 4vw, 64px) 64px; }
 .topbar { display: flex; gap: 24px; justify-content: space-between; align-items: flex-end; margin: 0 auto 28px; max-width: 1320px; }
@@ -398,6 +401,29 @@ button.action-card { width: 100%; font: inherit; }
 .settings-save { position: sticky; bottom: 12px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 15px; border: 1px solid #a5748e; border-radius: 14px; color: #f7e4ee; background: var(--dark); box-shadow: var(--shadow); }
 .settings-save span { font-size: 10px; }
 
+/* Administrators */
+.admin-overview { display: flex; align-items: center; justify-content: space-between; gap: 26px; border: 1px solid #efc9dc; border-radius: 18px; padding: 22px 26px; background: #ffeaf4; box-shadow: var(--shadow); }
+.admin-overview > div { display: flex; align-items: baseline; gap: 11px; }
+.admin-overview strong { color: var(--accent-dark); font-family: Manrope, sans-serif; font-size: 38px; line-height: 1; }
+.admin-overview span { color: var(--ink-2); font-weight: 700; }
+.admin-overview p { max-width: 620px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+.admin-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(350px, .6fr); gap: 18px; align-items: start; margin-top: 4px !important; }
+.admin-list { min-width: 0; }
+.admin-row { display: grid; grid-template-columns: 48px minmax(0,1fr) auto; gap: 14px; align-items: center; margin-bottom: 10px; padding: 17px; }
+.admin-avatar { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 15px; color: #fff; background: var(--accent); font-family: Manrope, "IBM Plex Sans Thai", sans-serif; font-size: 19px; font-weight: 800; }
+.admin-identity { min-width: 0; }
+.admin-identity > div { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.admin-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-identity > span, .admin-identity > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-identity > span { margin-top: 3px; color: var(--ink-2); font-size: 10px; }
+.admin-identity > small { margin-top: 2px; color: var(--muted); font-size: 9px; }
+.badge.system { color: #8a4770; background: #ffe4f0; }
+.admin-actions { justify-self: end; }
+.admin-create { position: sticky; top: 22px; margin-top: 34px; padding: 23px; }
+.admin-create h3 { margin: 0 0 5px; font-size: 21px; }
+.admin-create > p { margin: 0 0 20px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.admin-security-note { border-top: 1px solid var(--line); padding-top: 14px; color: var(--green) !important; font-size: 9px !important; }
+
 /* Modal, toast and public */
 .modal-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 20px; background: rgba(75,48,64,.62); }
 .modal { width: min(850px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid #f3d8e5; border-radius: 18px; background: var(--surface); box-shadow: 0 28px 80px rgba(75,48,64,.28); }
@@ -430,6 +456,8 @@ button.action-card { width: 100%; font: inherit; }
   .match-row { grid-template-columns: 48px minmax(135px,1fr) 125px minmax(135px,1fr) 118px; gap: 8px; padding: 12px; }
   .round-control { grid-template-columns: 1fr; }
   .round-create-form { border-top: 1px solid #3c5353; }
+  .admin-layout { grid-template-columns: 1fr; }
+  .admin-create { position: static; margin-top: 0; }
 }
 
 @media (max-width: 950px) {
@@ -496,6 +524,11 @@ button.action-card { width: 100%; font: inherit; }
   .match-action { grid-area: action; justify-self: stretch; justify-content: flex-start; padding-top: 4px; }
   .match-action select { max-width: none; flex: 1 1 170px; }
   .standing-leader, .publish-card { align-items: flex-start; flex-direction: column; }
+  .admin-overview { align-items: flex-start; flex-direction: column; }
+  .admin-row { grid-template-columns: 42px minmax(0,1fr); }
+  .admin-avatar { width: 42px; height: 42px; }
+  .admin-actions { grid-column: 1 / -1; justify-self: stretch; }
+  .admin-actions .button { width: 100%; }
   .leader-score { text-align: left; }
   .publish-actions { width: 100%; flex-wrap: wrap; }
   .publish-actions .button { flex: 1 1 150px; }

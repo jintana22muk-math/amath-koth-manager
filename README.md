@@ -26,14 +26,14 @@
 - สร้าง Master Score Card จากแม่แบบจริงเป็น PDF หลายหน้า ทั้งฉบับเตรียมแข่งขันและฉบับผลสมบูรณ์
 - บันทึกทีมที่เริ่มก่อนในแต่ละเกม เพื่อนำไปแสดงบน Master Score Card
 - รองรับการพิมพ์ตารางคะแนนและใบประกบคู่จากเบราว์เซอร์
-- มีรหัสผ่านผู้ดูแล และ session แบบ HttpOnly Cookie
+- มีบัญชีผู้ดูแลหลายคน เพิ่มหรือลบได้จากหน้า “จัดการผู้ดูแล” พร้อม session แบบ HttpOnly Cookie
 
 ## โครงสร้างเทคโนโลยี
 
 - **Frontend:** HTML, CSS, JavaScript และ PDF-Lib ที่เก็บไว้ในโปรเจกต์ ไม่ต้อง build frontend
 - **Backend:** Cloudflare Worker API + Fflate สำหรับอ่านโครงสร้างไฟล์ DOCX
 - **Database:** Cloudflare D1 (SQLite แบบ serverless)
-- **Authentication:** รหัสผ่านผู้ดูแล 1 ชุด เก็บเป็น Cloudflare Secret
+- **Authentication:** บัญชีหลักเก็บรหัสผ่านเป็น Cloudflare Secret และบัญชีเพิ่มเติมเก็บรหัสผ่านแบบ salted PBKDF2 ใน D1
 - **Static Assets:** ถูกเสิร์ฟจาก Workers Static Assets ในโปรเจกต์เดียวกับ API
 
 ## ติดตั้งและ Deploy บน Cloudflare
@@ -93,7 +93,7 @@ openssl rand -hex 32
 npx wrangler deploy
 ```
 
-Wrangler จะแจ้ง URL ของเว็บแอป เช่น `https://amath-koth-manager.<account>.workers.dev` เปิด URL นั้นแล้วเข้าสู่ระบบด้วย `ADMIN_PASSWORD` ที่กำหนดไว้
+Wrangler จะแจ้ง URL ของเว็บแอป เช่น `https://amath-koth-manager.<account>.workers.dev` เปิด URL นั้นแล้วเข้าสู่ระบบด้วยชื่อผู้ใช้ `admin` และรหัสจาก `ADMIN_PASSWORD` ที่กำหนดไว้ จากนั้นเพิ่มผู้ช่วยจัดการแข่งขันได้ที่หน้า “จัดการผู้ดูแล”
 
 ## ทดลองในเครื่องก่อน Deploy
 
@@ -159,14 +159,18 @@ amath-koth-cloudflare/
 │   └── vendor/pdf-lib.min.js
 ├── src/
 │   ├── worker.js           API, authentication, KOTH workflow
+│   ├── auth.js             แฮชและตรวจรหัสผ่านบัญชีผู้ดูแล
 │   ├── core.js             ตารางคะแนนและอัลกอริทึมจับคู่
 │   └── documents.js        อ่านและตรวจตารางรายชื่อจาก DOCX
 ├── migrations/
 │   ├── 0001_init.sql       ตาราง D1 เริ่มต้น
-│   └── 0002_document_center.sql ข้อมูลผู้แข่งขันและผู้เริ่มก่อน
+│   ├── 0002_document_center.sql ข้อมูลผู้แข่งขันและผู้เริ่มก่อน
+│   └── 0003_admin_users.sql บัญชีผู้ดูแลหลายคน
 ├── tests/
 │   ├── core.test.mjs
-│   └── documents.test.mjs
+│   ├── documents.test.mjs
+│   ├── auth.test.mjs
+│   └── worker-auth.test.mjs
 ├── wrangler.jsonc          ตั้งค่า Cloudflare Worker / Assets / D1
 └── .dev.vars.example       ตัวอย่าง secret สำหรับ local development
 ```
