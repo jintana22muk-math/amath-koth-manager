@@ -8,17 +8,23 @@ const state = {
   data: null,
   view: 'dashboard',
   modal: null,
+  docxPreview: null,
+  docxSourceName: '',
+  docxLoading: false,
   toasts: []
 };
 
 const navItems = [
-  ['dashboard', 'ภาพรวม'],
-  ['tournaments', 'รายการแข่งขัน'],
-  ['teams', 'ทีมแข่งขัน'],
-  ['koth', 'จับคู่และบันทึกผล'],
-  ['standings', 'ตารางคะแนน'],
-  ['reports', 'รายงานและเผยแพร่'],
-  ['settings', 'ตั้งค่ารายการ']
+  ['dashboard', 'ภาพรวม', '01'],
+  ['teams', 'รายชื่อทีม', '02'],
+  ['koth', 'แข่งขันและบันทึกผล', '03'],
+  ['standings', 'อันดับคะแนน', '04']
+];
+
+const utilityNavItems = [
+  ['tournaments', 'ทัวร์นาเมนต์ทั้งหมด'],
+  ['reports', 'ศูนย์เอกสาร'],
+  ['settings', 'ตั้งค่าทัวร์นาเมนต์']
 ];
 
 function escapeHtml(value) {
@@ -84,24 +90,49 @@ async function refreshAll() {
 function pageHeading() {
   const tournament = state.data?.tournament;
   const titles = {
-    dashboard: ['ภาพรวมการแข่งขัน', 'ติดตามความพร้อมของรายการและไปยังขั้นตอนถัดไป'],
-    tournaments: ['รายการแข่งขัน', 'สร้างรายการใหม่ เก็บประวัติเดิม และสำรองข้อมูลได้ไม่จำกัดปี'],
-    teams: ['ทีมแข่งขัน', 'เพิ่ม แก้ไข ถอน หรือกู้คืนทีมได้ตลอดรายการ'],
-    koth: ['จับคู่และบันทึกผล', 'จับคู่แบบ King of the Hill พร้อมกันพบซ้ำ และบันทึกคะแนนรายโต๊ะ'],
-    standings: ['ตารางคะแนน KOTH', 'เรียงอันดับตามกติกาที่กำหนดไว้ และอัปเดตทันทีเมื่อยืนยันผล'],
-    reports: ['รายงานและเผยแพร่', 'ส่งออกข้อมูล พิมพ์เอกสาร และเปิดตารางคะแนนสาธารณะ'],
-    settings: ['ตั้งค่ารายการแข่งขัน', 'กำหนดระบบคะแนน ผลต่างคะแนน และการเผยแพร่ข้อมูล']
+    dashboard: ['ศูนย์ควบคุมการแข่งขัน', 'ดูสถานะและทำงานสำคัญต่อได้ทันที'],
+    tournaments: ['ทัวร์นาเมนต์ทั้งหมด', 'สลับรายการ สร้างรายการใหม่ และกลับมาจัดการรายการเดิม'],
+    teams: ['รายชื่อทีม', 'เตรียมรายชื่อให้พร้อมก่อนเริ่มจับคู่'],
+    koth: ['แข่งขันและบันทึกผล', 'สร้างคู่แข่ง กรอกคะแนน และติดตามงานที่ยังไม่เสร็จในหน้าเดียว'],
+    standings: ['อันดับคะแนน', 'ตารางอันดับจะคำนวณใหม่ทันทีเมื่อยืนยันผล'],
+    reports: ['ศูนย์เอกสาร', 'นำเข้ารายชื่อ สร้างใบแข่งขัน และส่งออกเอกสารจากข้อมูลชุดเดียว'],
+    settings: ['ตั้งค่าทัวร์นาเมนต์', 'แก้ไขข้อมูลรายการและกติกาคะแนนเมื่อจำเป็น']
   };
   const [title, subtitle] = titles[state.view] || titles.dashboard;
-  return `<div class="topbar"><div><h2>${title}</h2><p>${subtitle}</p></div>${tournament ? tournamentPicker() : ''}</div>`;
+  return `<div class="topbar"><div class="page-title"><span class="eyebrow">A-MATH · KING OF THE HILL</span><h2>${title}</h2><p>${subtitle}</p></div>${tournament ? tournamentPicker() : '<button class="button primary" data-action="new-tournament">สร้างทัวร์นาเมนต์</button>'}</div>`;
 }
 
 function tournamentPicker() {
-  return `<div class="tournament-switch"><label for="tournament-selector">รายการที่กำลังจัดการ</label><select id="tournament-selector">${state.tournaments.map((tournament) => `<option value="${escapeHtml(tournament.id)}" ${tournament.id === state.selectedId ? 'selected' : ''}>${escapeHtml(tournament.name)}${tournament.academic_year ? ` · ${escapeHtml(tournament.academic_year)}` : ''}</option>`).join('')}</select></div>`;
+  return `<div class="tournament-switch"><label for="tournament-selector">กำลังจัดการทัวร์นาเมนต์</label><div class="select-wrap"><select id="tournament-selector">${state.tournaments.map((tournament) => `<option value="${escapeHtml(tournament.id)}" ${tournament.id === state.selectedId ? 'selected' : ''}>${escapeHtml(tournament.name)}${tournament.academic_year ? ` · ${escapeHtml(tournament.academic_year)}` : ''}</option>`).join('')}</select></div></div>`;
 }
 
 function renderNoTournament() {
-  return `<section class="card hero"><h2>เริ่มระบบจัดการแข่งขัน A-Math KOTH ของคุณ</h2><p>สร้างรายการแข่งขันใหม่ก่อน แล้วเพิ่มทีม ตั้งค่ากติกา จับคู่การแข่งขัน บันทึกผล และเผยแพร่ตารางคะแนนได้จากที่เดียว</p><div class="hero-actions"><button class="button primary" data-action="new-tournament">＋ สร้างรายการแข่งขันแรก</button><button class="button secondary" data-action="go-tournaments">ดูรายการแข่งขัน</button></div></section>`;
+  return `<section class="empty-state card"><span class="empty-kicker">เริ่มต้นครั้งแรก</span><h2>สร้างทัวร์นาเมนต์แรกของคุณ</h2><p>ใช้เวลาไม่ถึง 1 นาที จากนั้นระบบจะพาไปเพิ่มทีม จับคู่ บันทึกผล และประกาศอันดับตามลำดับ</p><div class="hero-actions"><button class="button primary" data-action="new-tournament">สร้างทัวร์นาเมนต์</button>${state.tournaments.length ? '<button class="button secondary" data-action="go-tournaments">เลือกจากรายการเดิม</button>' : ''}</div></section>`;
+}
+
+function workflowStatus(data) {
+  const activeTeams = data.teams.filter((team) => team.is_active);
+  const koth = data.rounds.filter((round) => round.phase === 'koth');
+  const current = koth.find((round) => round.status !== 'completed');
+  const pendingMatches = current?.matches.filter((match) => !match.is_bye && match.status !== 'final').length || 0;
+  if (activeTeams.length < 2) return { step: 1, action: 'go-teams', label: 'เพิ่มรายชื่อทีม', detail: `ตอนนี้มี ${activeTeams.length} ทีม ต้องมีอย่างน้อย 2 ทีมเพื่อเริ่มแข่งขัน` };
+  if (current) return { step: 2, action: 'go-koth', label: `บันทึกผล ${current.title}`, detail: pendingMatches ? `เหลืออีก ${pendingMatches} คู่ที่ยังไม่ได้ยืนยันผล` : 'ตรวจสอบผลและไปต่อรอบถัดไป' };
+  if (koth.length < Number(data.tournament.rounds_planned || 0)) return { step: 2, action: 'go-koth', label: `สร้างคู่เกมที่ ${koth.length + 1}`, detail: `แข่งขันแล้ว ${koth.length} จาก ${data.tournament.rounds_planned} เกมที่วางแผนไว้` };
+  return { step: 3, action: 'go-standings', label: 'ตรวจสอบอันดับและประกาศผล', detail: 'ผล KOTH ครบตามจำนวนเกมที่วางแผนแล้ว' };
+}
+
+function workflowSteps(data) {
+  const activeTeams = data.teams.filter((team) => team.is_active).length;
+  const koth = data.rounds.filter((round) => round.phase === 'koth');
+  const hasOpenRound = koth.some((round) => round.status !== 'completed');
+  const currentStep = activeTeams < 2 ? 1 : (hasOpenRound || koth.length < Number(data.tournament.rounds_planned || 0)) ? 2 : 3;
+  const steps = [
+    ['teams', '1', 'เตรียมทีม', `${activeTeams} ทีม`],
+    ['koth', '2', 'แข่งขัน', `${koth.filter((round) => round.status === 'completed').length}/${data.tournament.rounds_planned} เกม`],
+    ['standings', '3', 'สรุปอันดับ', data.standings.length ? 'พร้อมตรวจสอบ' : 'รอผลแข่ง'],
+    ['reports', '4', 'เผยแพร่', data.tournament.public_enabled ? 'เปิดแล้ว' : 'ยังไม่เปิด']
+  ];
+  return `<section class="workflow" aria-label="ขั้นตอนการจัดการแข่งขัน">${steps.map(([view, number, title, meta], index) => `<button class="workflow-step ${index + 1 < currentStep ? 'done' : ''} ${index + 1 === currentStep ? 'current' : ''}" data-action="nav" data-view="${view}"><span class="step-number">${index + 1 < currentStep ? '✓' : number}</span><span><strong>${title}</strong><small>${meta}</small></span></button>`).join('')}</section>`;
 }
 
 function renderDashboard() {
@@ -113,17 +144,19 @@ function renderDashboard() {
   const completed = koth.filter((round) => round.status === 'completed').length;
   const current = koth.find((round) => round.status === 'open');
   const top = data.standings.slice(0, 5);
+  const next = workflowStatus(data);
   return `
-    <section class="card hero">
-      <div class="split"><div><span class="badge ${escapeHtml(tournament.status)}">${tournament.status === 'draft' ? 'กำลังเตรียมรายการ' : tournament.status === 'open' ? 'กำลังแข่งขัน' : 'เสร็จสิ้น'}</span><h2>${escapeHtml(tournament.name)}</h2><p>${[tournament.category, tournament.academic_year, tournament.venue].filter(Boolean).map(escapeHtml).join(' · ') || 'ยังไม่ได้ระบุรายละเอียดสถานที่และปีการศึกษา'}</p></div><div class="button-row"><button class="button secondary" data-action="go-teams">จัดการทีม</button><button class="button primary" data-action="go-koth">ไปที่การจับคู่</button></div></div>
+    ${workflowSteps(data)}
+    <section class="dashboard-hero">
+      <div class="hero-copy"><span class="status-dot ${escapeHtml(tournament.status)}">${tournament.status === 'draft' ? 'กำลังเตรียมรายการ' : tournament.status === 'open' ? 'กำลังแข่งขัน' : 'เสร็จสิ้น'}</span><h2>${escapeHtml(tournament.name)}</h2><p>${[tournament.category, tournament.academic_year, tournament.venue].filter(Boolean).map(escapeHtml).join(' · ') || 'เพิ่มรายละเอียดปีและสถานที่ได้ในหน้าตั้งค่า'}</p></div>
+      <aside class="next-action"><span>สิ่งที่ควรทำต่อ</span><h3>${next.label}</h3><p>${next.detail}</p><button class="button primary" data-action="${next.action}">ไปทำขั้นตอนนี้ <span aria-hidden="true">→</span></button></aside>
     </section>
-    <section class="grid grid-4" style="margin-top:16px">
-      <article class="card metric"><div class="metric-label">ทีมที่เข้าร่วม</div><div class="metric-value">${active.length}</div><div class="metric-note">ทีมที่เปิดใช้งาน</div></article>
-      <article class="card metric"><div class="metric-label">เกม KOTH ที่เสร็จแล้ว</div><div class="metric-value">${completed}/${tournament.rounds_planned}</div><div class="metric-note">สร้างเพิ่มได้ตามต้องการ</div></article>
-      <article class="card metric"><div class="metric-label">สถานะรอบปัจจุบัน</div><div class="metric-value" style="font-size:21px">${current ? escapeHtml(current.title) : (completed ? 'พร้อมรอบถัดไป' : 'รอสร้างคู่')}</div><div class="metric-note">${current ? 'บันทึกผลให้ครบก่อนสร้างเกมถัดไป' : 'เริ่มต้นได้เมื่อมีอย่างน้อย 2 ทีม'}</div></article>
-      <article class="card metric"><div class="metric-label">ตารางคะแนนสาธารณะ</div><div class="metric-value" style="font-size:21px">${tournament.public_enabled ? 'เปิดแล้ว' : 'ปิดอยู่'}</div><div class="metric-note">${tournament.public_enabled ? `รหัส: ${escapeHtml(tournament.code)}` : 'เปิดได้ในหน้าตั้งค่า'}</div></article>
+    <section class="grid grid-3 dashboard-metrics">
+      <article class="card metric"><div class="metric-label">ทีมที่พร้อมแข่ง</div><div class="metric-value">${active.length}</div><div class="metric-note">${active.length >= 2 ? 'พร้อมสำหรับการจับคู่' : 'เพิ่มอย่างน้อย 2 ทีม'}</div></article>
+      <article class="card metric"><div class="metric-label">ความคืบหน้า KOTH</div><div class="metric-value">${completed}<small> / ${tournament.rounds_planned}</small></div><div class="metric-note">${current ? `${escapeHtml(current.title)} กำลังดำเนินการ` : completed ? 'พร้อมสร้างเกมถัดไป' : 'ยังไม่เริ่มแข่งขัน'}</div></article>
+      <article class="card metric"><div class="metric-label">การเผยแพร่ผล</div><div class="metric-value metric-text">${tournament.public_enabled ? 'เปิดแล้ว' : 'ยังไม่เปิด'}</div><div class="metric-note">${tournament.public_enabled ? `ผู้ชมเข้าดูด้วยรหัส ${escapeHtml(tournament.code)}` : 'เปิดเมื่อพร้อมประกาศผล'}</div></article>
     </section>
-    <section class="section-head"><div><h3>ผู้นำคะแนนล่าสุด</h3><p>อัปเดตจากผลที่ยืนยันแล้วเท่านั้น</p></div><button class="button ghost small" data-action="go-standings">ดูตารางเต็ม</button></section>
+    <section class="section-head"><div><span class="section-kicker">LIVE STANDING</span><h3>อันดับล่าสุด</h3><p>คำนวณจากผลที่ยืนยันแล้ว</p></div><button class="button ghost small" data-action="go-standings">ดูอันดับทั้งหมด</button></section>
     ${top.length ? standingsTable(top, true) : `<section class="card empty"><div class="empty-icon">⌁</div><h3>ยังไม่มีรายชื่อทีม</h3><p>เพิ่มทีมก่อนเริ่มจัดการแข่งขัน</p><button class="button primary" data-action="go-teams">เพิ่มทีมแข่งขัน</button></section>`}
   `;
 }
@@ -133,21 +166,21 @@ function standingsTable(rows, compact = false) {
 }
 
 function renderTournaments() {
-  return `<div class="grid grid-2"><section class="card card-pad"><h3>สร้างรายการแข่งขันใหม่</h3><p class="muted small">เริ่มจากข้อมูลว่างทุกครั้ง เพื่อเก็บรายการในอนาคตได้ไม่จำกัด</p>${tournamentForm('create-tournament')}</section><section class="card card-pad"><h3>รายการที่บันทึกไว้</h3>${state.tournaments.length ? `<div class="table-wrap"><table><thead><tr><th>ชื่อรายการ</th><th>ทีม</th><th>KOTH</th><th>สถานะ</th><th></th></tr></thead><tbody>${state.tournaments.map((tournament) => `<tr><td><div class="team-title">${escapeHtml(tournament.name)}</div><div class="team-meta">${escapeHtml([tournament.academic_year, tournament.category].filter(Boolean).join(' · '))}</div></td><td>${tournament.team_count}</td><td>${tournament.koth_round_count}</td><td>${badge(tournament.status)}</td><td class="right-align"><button class="button ghost small" data-action="select-tournament" data-id="${escapeHtml(tournament.id)}">จัดการ</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty"><div class="empty-icon">＋</div><h3>ยังไม่มีรายการแข่งขัน</h3><p>ใช้แบบฟอร์มด้านซ้ายเพื่อสร้างรายการแรก</p></div>'}</section></div>`;
+  return `<section class="tournament-toolbar"><div><strong>${state.tournaments.length} ทัวร์นาเมนต์</strong><span>แต่ละรายการแยกทีม ผล และกติกาออกจากกันอย่างชัดเจน</span></div><button class="button primary" data-action="new-tournament">สร้างทัวร์นาเมนต์ใหม่</button></section>${state.tournaments.length ? `<section class="tournament-grid">${state.tournaments.map((tournament) => `<article class="tournament-card card ${tournament.id === state.selectedId ? 'selected' : ''}"><div class="tournament-card-top"><span class="tournament-year">${escapeHtml(tournament.academic_year || 'ไม่ระบุปี')}</span>${badge(tournament.status)}</div><h3>${escapeHtml(tournament.name)}</h3><p>${escapeHtml([tournament.category, tournament.venue].filter(Boolean).join(' · ') || 'ยังไม่ได้ระบุประเภทและสถานที่')}</p><div class="tournament-stats"><span><strong>${tournament.team_count}</strong> ทีม</span><span><strong>${tournament.koth_round_count}</strong> เกม KOTH</span></div><div class="tournament-card-footer">${tournament.id === state.selectedId ? '<span class="selected-label">กำลังจัดการรายการนี้</span>' : '<span></span>'}<button class="button secondary small" data-action="select-tournament" data-id="${escapeHtml(tournament.id)}">${tournament.id === state.selectedId ? 'เปิดศูนย์ควบคุม' : 'จัดการรายการนี้'}</button></div></article>`).join('')}</section>` : renderNoTournament()}`;
 }
 
 function tournamentForm(formName, tournament = {}) {
   const scoring = tournament.scoring || { win_points: 2, draw_points: 1, loss_points: 0, bye_points: 2, default_diff_cap: 250, round_caps: [250,250,250,250,200] };
   return `<form data-form="${formName}" class="form-grid">
-    <div class="field full"><label>ชื่อรายการแข่งขัน *</label><input name="name" required value="${escapeHtml(tournament.name || '')}" placeholder="เช่น การแข่งขัน A-Math King of the Hill ปีการศึกษา 2569" /></div>
-    <div class="field"><label>ปีการศึกษา / ปีแข่งขัน</label><input name="academic_year" value="${escapeHtml(tournament.academic_year || '')}" placeholder="2569" /></div>
-    <div class="field"><label>ประเภทการแข่งขัน</label><input name="category" value="${escapeHtml(tournament.category || 'A-Math')}" /></div>
-    <div class="field"><label>จำนวนเกม KOTH ที่วางแผน</label><input type="number" min="1" max="99" name="rounds_planned" value="${escapeHtml(tournament.rounds_planned || 5)}" /></div>
+    <div class="field full"><label>ชื่อทัวร์นาเมนต์ <span class="required">จำเป็น</span></label><input name="name" required value="${escapeHtml(tournament.name || '')}" placeholder="เช่น A-Math ชิงแชมป์ระดับมัธยม 2569" /></div>
+    <div class="field"><label>ปีการศึกษา</label><input name="academic_year" value="${escapeHtml(tournament.academic_year || '')}" placeholder="2569" /></div>
+    <div class="field"><label>ประเภท</label><input name="category" value="${escapeHtml(tournament.category || 'A-Math')}" /></div>
+    <div class="field"><label>จำนวนเกม KOTH</label><input type="number" min="1" max="99" name="rounds_planned" value="${escapeHtml(tournament.rounds_planned || 5)}" /><small>แก้ไขภายหลังได้</small></div>
     <div class="field wide"><label>หน่วยงาน / ผู้จัด</label><input name="organizer" value="${escapeHtml(tournament.organizer || '')}" /></div>
     <div class="field wide"><label>สถานที่</label><input name="venue" value="${escapeHtml(tournament.venue || '')}" /></div>
     <div class="field"><label>วันเริ่ม</label><input type="date" name="starts_on" value="${escapeHtml(tournament.starts_on || '')}" /></div>
     <div class="field"><label>วันสิ้นสุด</label><input type="date" name="ends_on" value="${escapeHtml(tournament.ends_on || '')}" /></div>
-    ${formName === 'create-tournament' ? '<div class="field full"><button class="button primary" type="submit">สร้างรายการแข่งขัน</button></div>' : ''}
+    ${formName === 'create-tournament' ? '<div class="field full form-actions"><button class="button primary" type="submit">สร้างและเริ่มเพิ่มทีม</button></div>' : ''}
   </form>`;
 }
 
@@ -161,21 +194,18 @@ function renderTeams() {
   const finalTeamIds = new Set(data.matches.filter((match) => match.status === 'final').flatMap((match) => [match.team_a_id, match.team_b_id].filter(Boolean)));
   const teamRows = (items, inactive = false) => `<div class="table-wrap"><table><thead><tr><th>Seed</th><th>ทีม</th><th>สังกัด</th><th>ผู้เข้าแข่งขัน</th><th>ครูผู้ควบคุม</th><th></th></tr></thead><tbody>${items.map((team) => `<tr class="${inactive ? 'is-muted' : ''}"><td><strong>${team.seed}</strong></td><td><div class="team-title">${escapeHtml(team.name)} <span class="code-pill">${escapeHtml(team.code)}</span>${inactive ? ' <span class="badge archived">ถอนแล้ว</span>' : ''}</div></td><td>${escapeHtml(team.school || '—')}</td><td>${escapeHtml([team.member_1, team.member_2].filter(Boolean).join(' / ') || '—')}</td><td>${escapeHtml(team.coach || '—')}</td><td class="right-align"><div class="button-row" style="justify-content:flex-end"><button class="button ghost small" data-action="edit-team" data-id="${escapeHtml(team.id)}">แก้ไข</button>${inactive ? `<button class="button secondary small" data-action="restore-team" data-id="${escapeHtml(team.id)}">กู้คืน</button>` : `<button class="button ghost small" data-action="delete-team" data-id="${escapeHtml(team.id)}" data-delete-mode="${finalTeamIds.has(team.id) ? 'withdraw' : matchedTeamIds.has(team.id) ? 'paired' : 'delete'}">${finalTeamIds.has(team.id) ? 'ถอนทีม' : 'ลบ'}</button>`}</div></td></tr>`).join('')}</tbody></table></div>`;
   return `
-    ${kothStarted ? '<section class="notice info" style="margin-bottom:16px"><strong>รายการเริ่มแล้ว</strong> ยังเพิ่มทีมใหม่ได้ ทีมใหม่จะเข้ารอบถัดไปหลังรอบที่กำลังแข่งบันทึกผลครบ ส่วนการถอนทีมจะไม่ลบประวัติผลเดิม</section>' : ''}
-    <div class="grid grid-2">
-      <section class="card card-pad"><h3>เพิ่มทีม</h3><form data-form="add-team" class="form-grid">
-        <div class="field"><label>Seed</label><input name="seed" type="number" min="1" placeholder="ระบบเรียงต่อให้" /></div>
-        <div class="field"><label>รหัสทีม</label><input name="code" placeholder="เช่น A01" /></div>
-        <div class="field wide"><label>ชื่อทีม *</label><input name="name" required placeholder="เช่น โรงเรียน... ทีม 1" /></div>
-        <div class="field full"><label>โรงเรียน / สังกัด</label><input name="school" /></div>
-        <div class="field"><label>ผู้เข้าแข่งขัน 1</label><input name="member_1" /></div>
-        <div class="field"><label>ผู้เข้าแข่งขัน 2</label><input name="member_2" /></div>
-        <div class="field"><label>ครูผู้ควบคุม</label><input name="coach" /></div>
-        <div class="field full"><button class="button primary" type="submit">เพิ่มทีม</button></div>
+    ${kothStarted ? '<section class="notice info" style="margin-bottom:16px"><strong>รายการเริ่มแข่งขันแล้ว</strong><span> ทีมที่เพิ่มใหม่จะถูกใช้ในการจับคู่เกมถัดไป ส่วนทีมที่ถอนจะยังคงมีประวัติผลเดิม</span></section>' : ''}
+    <section class="team-summary card"><div><span class="summary-number">${teams.length}</span><span>ทีมที่พร้อมแข่งขัน</span></div><div class="summary-rule"></div><p>${teams.length < 2 ? 'เพิ่มอีกอย่างน้อย 2 ทีมเพื่อเริ่มจับคู่' : `พร้อมสร้างคู่แข่งขัน${teams.length % 2 ? ' · จะมี 1 ทีมได้ BYE' : ''}`}</p></section>
+    <div class="grid grid-2 team-entry-grid">
+      <section class="card card-pad"><span class="section-kicker">เพิ่มทีละทีม</span><h3>ข้อมูลทีมใหม่</h3><form data-form="add-team" class="form-grid compact-form">
+        <div class="field full"><label>ชื่อทีม <span class="required">จำเป็น</span></label><input name="name" required placeholder="เช่น โรงเรียนตัวอย่าง ทีม A" /></div>
+        <div class="field full"><label>โรงเรียน / สังกัด</label><input name="school" placeholder="ชื่อโรงเรียนหรือชมรม" /></div>
+        <details class="advanced-fields field full"><summary>เพิ่มข้อมูลผู้แข่งขันสำหรับเอกสาร</summary><div class="form-grid"><div class="field"><label>Seed</label><input name="seed" type="number" min="1" placeholder="อัตโนมัติ" /></div><div class="field"><label>รหัสทีม</label><input name="code" placeholder="เช่น A01" /></div><div class="field"><label>จังหวัด</label><input name="province" /></div><div class="field"><label>ครูผู้ควบคุม</label><input name="coach" /></div><div class="participant-fields field full"><strong>ผู้แข่งขันคนที่ 1</strong><div class="form-grid"><div class="field wide"><label>ชื่อ–นามสกุล</label><input name="member_1" /></div><div class="field"><label>ระดับชั้น / ห้อง</label><input name="member_1_level" /></div><div class="field"><label>เลขประจำตัว</label><input name="member_1_student_id" /></div><div class="field"><label>เบอร์โทรศัพท์</label><input name="member_1_phone" /></div></div></div><div class="participant-fields field full"><strong>ผู้แข่งขันคนที่ 2</strong><div class="form-grid"><div class="field wide"><label>ชื่อ–นามสกุล</label><input name="member_2" /></div><div class="field"><label>ระดับชั้น / ห้อง</label><input name="member_2_level" /></div><div class="field"><label>เลขประจำตัว</label><input name="member_2_student_id" /></div><div class="field"><label>เบอร์โทรศัพท์</label><input name="member_2_phone" /></div></div></div></div></details>
+        <div class="field full"><button class="button primary" type="submit">เพิ่มทีมนี้</button></div>
       </form></section>
-      <section class="card card-pad"><h3>นำเข้าทีมหลายรายการ</h3><p class="muted small">วางข้อมูลแบบ 1 บรรทัดต่อ 1 ทีม: <code>รหัสทีม,ชื่อทีม,โรงเรียน,ผู้แข่งขัน1,ผู้แข่งขัน2,ครูผู้ควบคุม</code></p><form data-form="import-teams"><div class="field full"><textarea name="team_lines" placeholder="A01,ทีม 1,โรงเรียนตัวอย่าง,นักเรียน ก,นักเรียน ข,ครู ก\nA02,ทีม 2,โรงเรียนตัวอย่าง,นักเรียน ค,นักเรียน ง,ครู ข"></textarea></div><button class="button secondary" type="submit">นำเข้ารายชื่อ</button></form><p class="small muted" style="margin:10px 0 0">หากนำเข้าระหว่างแข่งขัน ทีมจะเริ่มถูกใช้เมื่อสร้างเกม KOTH ถัดไป</p></section>
+      <section class="card card-pad import-card"><span class="section-kicker">เพิ่มหลายทีม</span><h3>วางรายชื่อจาก Excel</h3><p class="muted small">หนึ่งบรรทัดต่อหนึ่งทีม เรียงข้อมูลเป็น: รหัส, ชื่อทีม, โรงเรียน, ผู้แข่งขัน 1, ผู้แข่งขัน 2, ครูผู้ควบคุม</p><form data-form="import-teams"><div class="field full"><textarea name="team_lines" placeholder="A01,ทีม 1,โรงเรียนตัวอย่าง,นักเรียน ก,นักเรียน ข,ครู ก\nA02,ทีม 2,โรงเรียนตัวอย่าง,นักเรียน ค,นักเรียน ง,ครู ข"></textarea></div><button class="button secondary" type="submit">นำเข้ารายชื่อทั้งหมด</button></form></section>
     </div>
-    <section class="section-head"><div><h3>ทีมที่ใช้จับคู่รอบถัดไป (${teams.length})</h3><p>Seed ใช้เป็นลำดับเริ่มต้นของเกมที่ 1 เมื่อเลือก “จับคู่ตาม Seed”</p></div></section>
+    <section class="section-head"><div><span class="section-kicker">TEAM LIST</span><h3>ทีมที่ใช้จับคู่รอบถัดไป</h3><p>Seed ใช้กำหนดลำดับเริ่มต้นของเกมแรกเท่านั้น</p></div>${teams.length >= 2 ? '<button class="button primary small" data-action="go-koth">ไปสร้างคู่แข่งขัน</button>' : ''}</section>
     ${teams.length ? teamRows(teams) : `<section class="card empty"><div class="empty-icon">♟</div><h3>ยังไม่มีทีมที่เปิดใช้งาน</h3><p>เพิ่มทีมทีละทีม หรือวางรายชื่อหลายทีมจาก Excel</p></section>`}
     ${inactiveTeams.length ? `<section class="section-head"><div><h3>ทีมที่ถอนจากรอบถัดไป (${inactiveTeams.length})</h3><p>ทีมเหล่านี้ไม่ถูกจับคู่ใหม่ แต่ผลเดิมยังอยู่ในประวัติและตารางคะแนน</p></div></section>${teamRows(inactiveTeams, true)}` : ''}`;
 }
@@ -186,20 +216,22 @@ function kothControls(data) {
   const nextNo = koth.length + 1;
   const cap = data.tournament.scoring.round_caps[nextNo - 1] ?? data.tournament.scoring.default_diff_cap;
   const teamCount = data.teams.filter((team) => team.is_active).length;
-  return `<section class="card card-pad"><div class="split"><div><h3 style="margin:0">สร้างเกม KOTH ถัดไป</h3><p class="muted small" style="margin:5px 0 0">ระบบจัดอันดับปัจจุบันแล้วประกบทีมที่มีอันดับใกล้กัน พร้อมพยายามหลีกเลี่ยงคู่เดิม</p></div>${incomplete ? badge('pending') : badge('open')}</div>${incomplete ? `<div class="notice warning" style="margin-top:15px">ต้องยืนยันผลใน <strong>${escapeHtml(incomplete.title)}</strong> ให้ครบก่อน จึงจะสร้างเกมถัดไปได้</div>` : `<form data-form="generate-round" class="form-grid" style="margin-top:14px"><div class="field"><label>วิธีจับคู่เกมแรก</label><select name="first_round_method"><option value="seed">ตาม Seed</option><option value="random">สุ่มลำดับ</option></select></div><div class="field"><label>เพดานผลต่างของเกมนี้</label><input type="number" min="0" name="diff_cap" value="${cap}" /></div><div class="field wide"><label>ชื่อเกม (เว้นว่างเพื่อใช้ “เกมที่ ${nextNo}”)</label><input name="title" /></div><div class="field full"><button class="button primary" type="submit" ${teamCount < 2 ? 'disabled' : ''}>สร้างคู่เกมที่ ${nextNo}</button> <span class="small muted">${teamCount < 2 ? 'ต้องเพิ่มอย่างน้อย 2 ทีม' : `มี ${teamCount} ทีม${teamCount % 2 ? ' · ระบบจะให้ BYE 1 ทีม' : ''}`}</span></div></form>`}</section>`;
+  const pendingCount = incomplete?.matches.filter((match) => !match.is_bye && match.status !== 'final').length || 0;
+  return `<section class="round-control ${incomplete ? 'has-active' : ''}"><div class="round-control-copy"><span class="section-kicker">${incomplete ? 'รอบที่กำลังแข่งขัน' : 'พร้อมสำหรับขั้นตอนถัดไป'}</span><h3>${incomplete ? escapeHtml(incomplete.title) : `สร้างคู่เกมที่ ${nextNo}`}</h3><p>${incomplete ? `ยังเหลือ ${pendingCount} คู่ที่ต้องบันทึกผล เมื่อครบแล้วจึงสร้างเกมถัดไปได้` : 'ระบบจะประกบทีมอันดับใกล้กันและพยายามหลีกเลี่ยงคู่ที่เคยพบกัน'}</p></div>${incomplete ? `<div class="round-progress"><strong>${incomplete.matches.length - pendingCount}/${incomplete.matches.length}</strong><span>คู่บันทึกแล้ว</span></div>` : `<form data-form="generate-round" class="round-create-form"><div class="field"><label>การจับคู่${nextNo > 1 ? '' : 'เกมแรก'}</label><select name="first_round_method" ${nextNo > 1 ? 'disabled' : ''}><option value="seed">ตาม Seed</option><option value="random">สุ่มลำดับ</option></select></div><div class="field"><label>เพดานผลต่าง</label><input type="number" min="0" name="diff_cap" value="${cap}" /></div><div class="field"><label>ชื่อเกม (ไม่จำเป็น)</label><input name="title" placeholder="เกมที่ ${nextNo}" /></div><button class="button primary" type="submit" ${teamCount < 2 ? 'disabled' : ''}>สร้างคู่เกมที่ ${nextNo}</button><small>${teamCount < 2 ? 'ต้องมีอย่างน้อย 2 ทีม' : `${teamCount} ทีม${teamCount % 2 ? ' · มี BYE 1 ทีม' : ''}`}</small></form>`}</section>`;
 }
 
 function renderMatchRow(match, round) {
   if (match.is_bye) return `<div class="match-row is-final"><div class="match-table">โต๊ะ ${match.table_no}</div><div class="match-team"><strong>${teamName(match.team_a)}</strong><small>${escapeHtml(match.team_a?.school || '')}</small></div><div class="bye-label">BYE</div><div class="match-team right"><strong>—</strong></div><div class="match-action">${badge('final')}</div></div>`;
   const isFinals = round.phase !== 'koth';
   const winnerOptions = isFinals ? `<select name="winner_team_id" aria-label="ผู้ชนะกรณีคะแนนเสมอ"><option value="">เลือกผู้ชนะเมื่อเสมอ</option><option value="${escapeHtml(match.team_a_id)}" ${match.winner_team_id === match.team_a_id ? 'selected' : ''}>${escapeHtml(short(match.team_a?.name || '', 16))}</option><option value="${escapeHtml(match.team_b_id)}" ${match.winner_team_id === match.team_b_id ? 'selected' : ''}>${escapeHtml(short(match.team_b?.name || '', 16))}</option></select>` : '';
-  return `<form class="match-row ${match.status === 'final' ? 'is-final' : ''}" data-form="match" data-match-id="${escapeHtml(match.id)}"><div class="match-table">โต๊ะ ${match.table_no}</div><div class="match-team"><strong>${teamName(match.team_a)}</strong><small>${escapeHtml(match.team_a?.school || '')}</small></div><div class="score-box"><input type="number" min="0" name="score_a" value="${match.score_a ?? ''}" aria-label="คะแนนทีม A" required /><span>:</span><input type="number" min="0" name="score_b" value="${match.score_b ?? ''}" aria-label="คะแนนทีม B" required /></div><div class="match-team right"><strong>${teamName(match.team_b)}</strong><small>${escapeHtml(match.team_b?.school || '')}</small></div><div class="match-action">${winnerOptions}<button class="button ${match.status === 'final' ? 'secondary' : 'primary'} small" type="submit">${match.status === 'final' ? 'บันทึกแก้ไข' : 'ยืนยันผล'}</button>${match.status === 'final' ? `<button class="button ghost small" type="button" data-action="reset-match" data-id="${escapeHtml(match.id)}">ล้างผล</button>${badge('final')}` : ''}</div></form>`;
+  const starterOptions = `<select name="starter_team_id" aria-label="ทีมที่เริ่มก่อน"><option value="">ผู้เริ่มก่อน (ไม่ระบุ)</option><option value="${escapeHtml(match.team_a_id)}" ${match.starter_team_id === match.team_a_id ? 'selected' : ''}>เริ่มก่อน: ${escapeHtml(short(match.team_a?.name || '', 13))}</option><option value="${escapeHtml(match.team_b_id)}" ${match.starter_team_id === match.team_b_id ? 'selected' : ''}>เริ่มก่อน: ${escapeHtml(short(match.team_b?.name || '', 13))}</option></select>`;
+  return `<form class="match-row ${match.status === 'final' ? 'is-final' : ''}" data-form="match" data-match-id="${escapeHtml(match.id)}"><div class="match-table">โต๊ะ ${match.table_no}</div><div class="match-team"><strong>${teamName(match.team_a)}</strong><small>${escapeHtml(match.team_a?.school || '')}</small></div><div class="score-box"><input type="number" min="0" name="score_a" value="${match.score_a ?? ''}" aria-label="คะแนนทีม A" required /><span>:</span><input type="number" min="0" name="score_b" value="${match.score_b ?? ''}" aria-label="คะแนนทีม B" required /></div><div class="match-team right"><strong>${teamName(match.team_b)}</strong><small>${escapeHtml(match.team_b?.school || '')}</small></div><div class="match-action">${starterOptions}${winnerOptions}<button class="button ${match.status === 'final' ? 'secondary' : 'primary'} small" type="submit">${match.status === 'final' ? 'บันทึกแก้ไข' : 'ยืนยันผล'}</button>${match.status === 'final' ? `<button class="button ghost small" type="button" data-action="reset-match" data-id="${escapeHtml(match.id)}">ล้างผล</button>${badge('final')}` : ''}</div></form>`;
 }
 
 function renderRounds(data) {
   const allRounds = data.rounds;
   if (!allRounds.length) return `<section class="card empty"><div class="empty-icon">↔</div><h3>ยังไม่มีการจับคู่</h3><p>เมื่อพร้อมแล้วให้สร้างเกม KOTH แรก ระบบจะเรียงตาม Seed หรือสุ่มลำดับตามที่เลือก</p></section>`;
-  return allRounds.map((round) => `<section class="card round-card"><header class="round-title"><div><h4>${escapeHtml(round.title)}</h4><p>${round.phase === 'koth' ? `เกม KOTH ${round.round_number} · จำกัดผลต่าง ±${round.diff_cap}` : round.phase === 'finals-semifinal' ? 'Top 4 · อันดับ 1 พบ 4 และอันดับ 2 พบ 3' : 'ผู้ชนะรอบรองชนะเลิศพบกัน และชิงอันดับ 3'}</p>${round.pairing_note ? `<p class="notice warning" style="margin:8px 0 0">${escapeHtml(round.pairing_note)}</p>` : ''}</div><div class="button-row">${badge(round.status)}${round.status !== 'completed' ? `<button class="button ghost small" data-action="edit-pairings" data-id="${escapeHtml(round.id)}">แก้ไขคู่</button>` : ''}</div></header><div class="match-list">${round.matches.map((match) => renderMatchRow(match, round)).join('')}</div></section>`).join('');
+  return allRounds.slice().reverse().map((round, index) => `<section class="card round-card ${index === 0 ? 'latest-round' : ''}"><header class="round-title"><div><span class="section-kicker">${index === 0 ? 'ล่าสุด' : 'รอบก่อนหน้า'}</span><h4>${escapeHtml(round.title)}</h4><p>${round.phase === 'koth' ? `เกม KOTH ${round.round_number} · เพดานผลต่าง ±${round.diff_cap}` : round.phase === 'finals-semifinal' ? 'Top 4 · อันดับ 1 พบ 4 และอันดับ 2 พบ 3' : 'รอบชิงชนะเลิศและชิงอันดับ 3'}</p>${round.pairing_note ? `<p class="notice warning" style="margin:8px 0 0">${escapeHtml(round.pairing_note)}</p>` : ''}</div><div class="button-row">${badge(round.status)}${round.status !== 'completed' ? `<button class="button ghost small" data-action="edit-pairings" data-id="${escapeHtml(round.id)}">แก้ไขคู่</button>` : ''}</div></header><div class="match-list">${round.matches.map((match) => renderMatchRow(match, round)).join('')}</div></section>`).join('');
 }
 
 function finalControls(data) {
@@ -211,27 +243,42 @@ function finalControls(data) {
   else if (semis.status === 'completed' && !medals) action = `<button class="button gold" data-action="create-finals" data-stage="medal">สร้างรอบชิงชนะเลิศ / ชิงอันดับ 3</button>`;
   else if (semis.status !== 'completed') action = `<span class="small muted">ยืนยันผลรอบรองชนะเลิศก่อนสร้างรอบชิงเหรียญ</span>`;
   const medalsHtml = medalData ? `<div class="notice success" style="margin-top:12px"><strong>ผลรอบชิง:</strong> 🥇 ${escapeHtml(medalData.gold?.name || '')} · 🥈 ${escapeHtml(medalData.silver?.name || '')} · 🥉 ${escapeHtml(medalData.bronze?.name || '')}</div>` : '';
-  return `<section class="section-head"><div><h3>รอบชิง (ตัวเลือก)</h3><p>ใช้เมื่อรายการต้องการคัด 4 อันดับแรกจากตาราง KOTH เพื่อชิงเหรียญ</p></div><div>${action}</div>${medalsHtml}</section>`;
+  return `<details class="finals-panel card"><summary><span><strong>รอบชิง Top 4</strong><small>ตัวเลือกสำหรับรายการที่ต้องการชิงเหรียญ</small></span><span class="details-chevron">⌄</span></summary><div class="finals-body"><p>ระบบจะนำ 4 อันดับแรกจากตาราง KOTH ไปสร้างรอบรองชนะเลิศและรอบชิง</p><div>${action}</div>${medalsHtml}</div></details>`;
 }
 
 function renderKoth() {
   const data = state.data;
   if (!data) return renderNoTournament();
-  return `${kothControls(data)}${finalControls(data)}<section class="section-head"><div><h3>รอบการแข่งขัน</h3><p>แก้ไขคู่ได้ก่อนยืนยันผลของแมตช์จริง ระบบจะแจ้งเตือนหากทีมซ้ำในรอบเดียวกัน</p></div></section>${renderRounds(data)}`;
+  return `${kothControls(data)}<section class="section-head"><div><span class="section-kicker">MATCH DESK</span><h3>โต๊ะแข่งขันและผลคะแนน</h3><p>รอบล่าสุดอยู่ด้านบน กรอกคะแนนแล้วกด “ยืนยันผล” รายคู่</p></div></section>${renderRounds(data)}${finalControls(data)}`;
 }
 
 function renderStandings() {
   const data = state.data;
   if (!data) return renderNoTournament();
-  return `${data.standings.length ? standingsTable(data.standings) : '<section class="card empty"><div class="empty-icon">≡</div><h3>ตารางคะแนนจะปรากฏเมื่อเพิ่มทีม</h3><p>สามารถตรวจสอบลำดับเริ่มต้นได้ทันทีหลังเพิ่มรายชื่อทีม</p></section>'}`;
+  const leader = data.standings[0];
+  return `${leader ? `<section class="standing-leader"><div><span class="section-kicker">อันดับ 1 ล่าสุด</span><h3>${escapeHtml(leader.name)}</h3><p>${escapeHtml(leader.school || leader.code)} · ชนะ ${leader.wins} · เสมอ ${leader.draws} · แพ้ ${leader.losses}</p></div><div class="leader-score"><strong>${leader.points}</strong><span>คะแนน</span></div></section><div class="standing-toolbar"><p>แสดงเฉพาะผลที่ยืนยันแล้ว</p><div class="button-row"><button class="button secondary small" data-action="export-csv">ดาวน์โหลด CSV</button><button class="button ghost small" data-action="print">พิมพ์ตาราง</button></div></div>` : ''}${data.standings.length ? standingsTable(data.standings) : '<section class="card empty"><div class="empty-icon">≡</div><h3>ตารางคะแนนจะปรากฏเมื่อเพิ่มทีม</h3><p>เพิ่มทีมแล้วระบบจะแสดงลำดับเริ่มต้นให้ทันที</p><button class="button primary" data-action="go-teams">เพิ่มทีม</button></section>'}`;
 }
 
 function renderReports() {
   const data = state.data;
-  if (!data) return renderNoTournament();
+  const importSection = `<section class="document-import card"><div><span class="section-kicker">IMPORT</span><h3>สร้างทัวร์นาเมนต์จากรายชื่อ Word</h3><p>อ่านตารางรายชื่อ แยกประเภทการแข่งขัน ตรวจชื่อซ้ำ และให้คุณยืนยันก่อนสร้างข้อมูลจริง</p><div class="document-trust"><span>DOCX</span><span>ตรวจข้อมูลซ้ำ</span><span>สร้างหลายรายการ</span></div></div><button class="button primary" data-action="import-docx">นำเข้ารายชื่อ Word</button></section>`;
+  if (!data) return `${importSection}<section class="card empty document-empty"><div class="empty-icon">PDF</div><h3>เลือกหรือสร้างทัวร์นาเมนต์เพื่อออกเอกสาร</h3><p>เมื่อนำเข้ารายชื่อแล้ว ระบบจะเปิดเครื่องมือ Master Score Card ให้อัตโนมัติ</p></section>`;
   const t = data.tournament;
   const publicUrl = `${location.origin}${location.pathname}?public=${encodeURIComponent(t.code)}`;
-  return `<div class="grid grid-2"><section class="card card-pad"><h3>เอกสารและข้อมูลสำรอง</h3><p class="muted small">สำรองเป็น JSON เพื่อเก็บประวัติ ย้ายระบบ หรือทำสำเนารายการในปีถัดไป</p><div class="button-row"><button class="button primary" data-action="export-backup">ดาวน์โหลดข้อมูลสำรอง</button><button class="button secondary" data-action="export-csv">ส่งออกตารางคะแนน CSV</button><button class="button ghost" data-action="print">พิมพ์หน้าปัจจุบัน</button></div><hr style="border:0;border-top:1px solid var(--line);margin:20px 0"><label class="field full"><span>กู้คืน / ทำสำเนาจากไฟล์สำรอง JSON</span><input id="backup-file" type="file" accept="application/json,.json" /></label><p class="small muted">ระบบจะสร้างเป็นรายการใหม่ จึงไม่ทับข้อมูลเดิม</p></section><section class="card card-pad"><h3>ตารางคะแนนสาธารณะ</h3><p class="muted small">เปิดให้ผู้ชมดูอันดับและผลการแข่งขัน โดยไม่สามารถแก้ไขข้อมูลได้</p><div class="notice ${t.public_enabled ? 'success' : 'warning'}">${t.public_enabled ? 'เปิดเผยข้อมูลสาธารณะแล้ว' : 'ยังปิดการเผยแพร่ — เปิดได้ในหน้าตั้งค่า'}</div><label class="field full" style="margin-top:14px"><span>ลิงก์หน้าสาธารณะ</span><input readonly value="${escapeHtml(publicUrl)}" /></label><div class="button-row"><button class="button ${t.public_enabled ? 'primary' : 'ghost'}" data-action="open-public" ${t.public_enabled ? '' : 'disabled'}>เปิดหน้าสาธารณะ</button><button class="button secondary" data-action="copy-public" ${t.public_enabled ? '' : 'disabled'}>คัดลอกลิงก์</button></div></section></div>`;
+  return `${importSection}<section class="section-head"><div><span class="section-kicker">MASTER SCORE CARD</span><h3>ใบมาสเตอร์สกอร์การ์ด</h3><p>สร้างจากแม่แบบจริง หนึ่งหน้าต่อหนึ่งทีม รวมเป็น PDF เดียวพร้อมพิมพ์</p></div></section><section class="master-card-builder"><div class="master-preview"><img src="/assets/master-score-card.png" alt="ตัวอย่างใบมาสเตอร์สกอร์การ์ด" /></div><div class="master-options"><span class="document-status">${data.teams.filter((team) => team.is_active).length} ทีม · ${data.rounds.filter((round) => round.phase === 'koth').length} เกม</span><h3>เลือกฉบับที่ต้องการ</h3><div class="master-option"><div><strong>ฉบับเตรียมแข่งขัน</strong><p>กรอกข้อมูลทีมและนักกีฬา ส่วนผลการแข่งขันเว้นว่างไว้เขียนมือ</p></div><button class="button primary" data-action="export-master-card" data-mode="blank">สร้าง PDF</button></div><div class="master-option"><div><strong>ฉบับผลการแข่งขัน</strong><p>เติมโต๊ะ คู่แข่งขัน คะแนน W/T/L และผลสะสมจากระบบ</p></div><button class="button secondary" data-action="export-master-card" data-mode="complete">สร้าง PDF พร้อมผล</button></div><p class="privacy-note">เอกสารนี้มีข้อมูลนักเรียน โปรดจัดเก็บและส่งต่อเฉพาะผู้เกี่ยวข้อง</p></div></section><section class="section-head"><div><span class="section-kicker">OTHER DOCUMENTS</span><h3>เผยแพร่ ส่งออก และสำรองข้อมูล</h3><p>ข้อมูลทุกเอกสารมาจากทัวร์นาเมนต์เดียวกัน</p></div></section><div class="action-card-grid"><button class="action-card card" data-action="export-csv"><span class="action-mark">CSV</span><strong>ตารางคะแนน</strong><small>เปิดต่อใน Excel หรือ Google Sheets</small></button><button class="action-card card" data-action="print"><span class="action-mark">PRINT</span><strong>พิมพ์หน้าปัจจุบัน</strong><small>พิมพ์หรือบันทึกเป็น PDF</small></button><button class="action-card card" data-action="export-backup"><span class="action-mark">JSON</span><strong>สำรองทัวร์นาเมนต์</strong><small>เก็บทีม คู่แข่ง ผล และการตั้งค่า</small></button><label class="action-card card upload-card"><span class="action-mark">RESTORE</span><strong>กู้คืนเป็นรายการใหม่</strong><small>ข้อมูลเดิมจะไม่ถูกเขียนทับ</small><input id="backup-file" type="file" accept="application/json,.json" /></label></div><section class="publish-card ${t.public_enabled ? 'is-live' : ''}" style="margin-top:28px"><div><span class="section-kicker">PUBLIC SCOREBOARD</span><h3>${t.public_enabled ? 'ตารางคะแนนเปิดให้ผู้ชมแล้ว' : 'พร้อมประกาศผลให้ผู้ชม'}</h3><p>${t.public_enabled ? 'ผู้ชมดูอันดับและผลล่าสุดได้ แต่ไม่สามารถแก้ไขข้อมูล' : 'เปิดการเผยแพร่จากหน้าตั้งค่าเมื่อข้อมูลพร้อม'}</p></div><div class="publish-actions"><button class="button primary" data-action="open-public" ${t.public_enabled ? '' : 'disabled'}>เปิดหน้าผู้ชม</button><button class="button secondary" data-action="copy-public" ${t.public_enabled ? '' : 'disabled'}>คัดลอกลิงก์</button></div></section><label class="share-link field full"><span>ลิงก์สำหรับผู้ชม</span><input readonly value="${escapeHtml(publicUrl)}" /></label>`;
+}
+
+function cleanImportedTitle(value, category) {
+  const cleaned = String(value || '').replace(/^ประกาศรายชื่อผู้มีสิทธิ์แข่งขัน\s*/i, '').trim();
+  return cleaned || `การแข่งขัน A-Math ${category || ''}`.trim();
+}
+
+function renderDocxImportModal() {
+  const preview = state.docxPreview;
+  if (state.docxLoading) return `<section class="docx-upload"><div class="loading-dot"></div><h3>กำลังอ่านตารางรายชื่อ</h3><p>ระบบกำลังแยกกลุ่มผู้แข่งขันและตรวจชื่อซ้ำจาก ${escapeHtml(state.docxSourceName)}</p></section>`;
+  if (!preview) return `<section class="docx-upload"><div class="upload-mark">DOCX</div><h3>เลือกไฟล์ประกาศรายชื่อผู้แข่งขัน</h3><p>ระบบรองรับตารางที่มีชื่อทีม ระดับชั้น ผู้แข่งขันคนที่ 1–2 และห้องเรียน ข้อมูลจะยังไม่ถูกบันทึกจนกว่าคุณจะตรวจสอบและยืนยัน</p><label class="file-drop"><input id="docx-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><span>เลือกไฟล์ Word .docx</span><small>ขนาดไม่เกิน 8 MB</small></label></section>`;
+  const year = state.data?.tournament?.academic_year || String(new Date().getFullYear() + 543);
+  return `<form data-form="commit-docx-import" class="docx-review"><div class="import-summary"><div><strong>${preview.team_count}</strong><span>ทีมที่อ่านได้</span></div><div><strong>${preview.groups.length}</strong><span>ทัวร์นาเมนต์ที่จะสร้าง</span></div><div class="${preview.warning_count ? 'has-warning' : ''}"><strong>${preview.warning_count}</strong><span>รายการที่ควรตรวจ</span></div></div><p class="notice info">ไฟล์: <strong>${escapeHtml(state.docxSourceName)}</strong> — ยกเลิกเครื่องหมายหน้าทีมที่ไม่ต้องการนำเข้า โดยระบบจะไม่เลือกแถวที่สงสัยว่าซ้ำไว้ให้</p>${preview.groups.map((group, groupIndex) => `<section class="import-group card"><header><label class="group-check"><input type="checkbox" name="group_${groupIndex}" checked /><span><strong>${escapeHtml(group.category)}</strong><small>${group.teams.length} ทีมจากตารางที่ ${group.table_index + 1}</small></span></label></header><div class="import-meta form-grid"><div class="field wide"><label>ชื่อทัวร์นาเมนต์</label><input name="name_${groupIndex}" value="${escapeHtml(cleanImportedTitle(group.title, group.category))}" /></div><div class="field"><label>ปีการศึกษา</label><input name="year_${groupIndex}" value="${escapeHtml(year)}" /></div><div class="field"><label>ประเภท</label><input name="category_${groupIndex}" value="${escapeHtml(group.category)}" /></div><div class="field wide"><label>โรงเรียน / ผู้จัด</label><input name="school_${groupIndex}" placeholder="ใช้กับทุกทีมในกลุ่มนี้" /></div><div class="field"><label>จังหวัด</label><input name="province_${groupIndex}" /></div><div class="field"><label>จำนวนเกม KOTH</label><input type="number" min="1" max="12" name="rounds_${groupIndex}" value="5" /></div></div><div class="import-team-list"><table><thead><tr><th>นำเข้า</th><th>ทีม</th><th>ผู้แข่งขันคนที่ 1</th><th>ผู้แข่งขันคนที่ 2</th><th>สถานะ</th></tr></thead><tbody>${group.teams.map((team, teamIndex) => `<tr class="${team.suspected_duplicate ? 'is-warning' : ''}"><td><input type="checkbox" name="team_${groupIndex}_${teamIndex}" ${team.suspected_duplicate ? '' : 'checked'} aria-label="นำเข้า ${escapeHtml(team.name)}" /></td><td><strong>${escapeHtml(team.name)}</strong><small>${escapeHtml(team.level)}</small></td><td>${escapeHtml(team.member_1)}<small>${escapeHtml(team.member_1_room)}</small></td><td>${escapeHtml(team.member_2)}<small>${escapeHtml(team.member_2_room)}</small></td><td>${team.suspected_duplicate ? `<span class="duplicate-flag" title="${escapeHtml(team.duplicate_reason)}">ตรวจชื่อซ้ำ</span>` : '<span class="ready-flag">พร้อม</span>'}</td></tr>`).join('')}</tbody></table></div></section>`).join('')}<div class="import-confirm"><div><strong>ระบบจะสร้างเป็นทัวร์นาเมนต์ใหม่</strong><span>ไม่แก้ไขหรือเขียนทับรายการที่มีอยู่</span></div><button class="button primary" type="submit">ยืนยันและสร้างทัวร์นาเมนต์</button></div></form>`;
 }
 
 function renderSettings() {
@@ -239,7 +286,7 @@ function renderSettings() {
   if (!data) return renderNoTournament();
   const t = data.tournament;
   const s = t.scoring;
-  return `<section class="card card-pad"><h3>ข้อมูลและกติกาการจัดอันดับ</h3><p class="muted small">การเปลี่ยนคะแนนหรือเพดานผลต่างจะคำนวณตารางอันดับใหม่จากผลการแข่งขันทั้งหมดทันที</p><form data-form="update-tournament" class="form-grid">${tournamentForm('settings-embedded', t).replace(/^<form[^>]*>|<\/form>$/g, '')}<div class="field"><label>คะแนนชนะ</label><input type="number" name="win_points" value="${s.win_points}" /></div><div class="field"><label>คะแนนเสมอ</label><input type="number" name="draw_points" value="${s.draw_points}" /></div><div class="field"><label>คะแนนแพ้</label><input type="number" name="loss_points" value="${s.loss_points}" /></div><div class="field"><label>คะแนน BYE</label><input type="number" name="bye_points" value="${s.bye_points}" /></div><div class="field"><label>เพดานผลต่างมาตรฐาน</label><input type="number" min="0" name="default_diff_cap" value="${s.default_diff_cap}" /></div><div class="field wide"><label>เพดานผลต่างแต่ละเกม (คั่นด้วย ,)</label><input name="round_caps" value="${escapeHtml(s.round_caps.join(', '))}" /><small>ตัวอย่าง: 250, 250, 250, 250, 200 — หากสร้างเกมเกินจำนวนนี้ ระบบใช้เพดานมาตรฐาน</small></div><div class="field full"><label>ลำดับเกณฑ์จัดอันดับ</label><select name="ranking_order"><option value="points,capped_diff,points_for,wins,name" ${t.ranking_rules.join(',') === 'points,capped_diff,points_for,wins,name' ? 'selected' : ''}>คะแนน → ผลต่างคะแนน → แต้มได้ → ชนะ → ชื่อทีม</option><option value="points,capped_diff,wins,points_for,name" ${t.ranking_rules.join(',') === 'points,capped_diff,wins,points_for,name' ? 'selected' : ''}>คะแนน → ผลต่างคะแนน → ชนะ → แต้มได้ → ชื่อทีม</option></select></div><div class="field full"><label class="checkbox-field"><input type="checkbox" name="public_enabled" ${t.public_enabled ? 'checked' : ''} /> เปิดเผยตารางคะแนนและผลการแข่งขันผ่านลิงก์สาธารณะ</label></div><div class="field full"><button class="button primary" type="submit">บันทึกการตั้งค่า</button></div></form></section>`;
+  return `<form data-form="update-tournament" class="settings-form"><section class="card settings-section"><header><span class="settings-number">1</span><div><h3>ข้อมูลทัวร์นาเมนต์</h3><p>ชื่อ ปี สถานที่ และจำนวนเกมที่วางแผน</p></div></header><div class="form-grid">${tournamentForm('settings-embedded', t).replace(/^<form[^>]*>|<\/form>$/g, '')}</div></section><section class="card settings-section"><header><span class="settings-number">2</span><div><h3>กติกาคะแนน</h3><p>ค่าเริ่มต้นเหมาะกับการแข่งขันทั่วไป เปลี่ยนเมื่อกติกาของงานกำหนดไว้ต่างออกไป</p></div></header><div class="notice warning"><strong>การแก้กติกาจะคำนวณอันดับใหม่ทันที</strong><span> ผลการแข่งขันเดิมจะไม่หาย</span></div><div class="form-grid settings-fields"><div class="field"><label>ชนะ</label><input type="number" name="win_points" value="${s.win_points}" /><small>คะแนน</small></div><div class="field"><label>เสมอ</label><input type="number" name="draw_points" value="${s.draw_points}" /><small>คะแนน</small></div><div class="field"><label>แพ้</label><input type="number" name="loss_points" value="${s.loss_points}" /><small>คะแนน</small></div><div class="field"><label>BYE</label><input type="number" name="bye_points" value="${s.bye_points}" /><small>คะแนน</small></div><div class="field"><label>เพดานผลต่างมาตรฐาน</label><input type="number" min="0" name="default_diff_cap" value="${s.default_diff_cap}" /></div><div class="field wide"><label>เพดานแต่ละเกม</label><input name="round_caps" value="${escapeHtml(s.round_caps.join(', '))}" /><small>คั่นแต่ละเกมด้วยเครื่องหมายจุลภาค เช่น 250, 250, 250, 200</small></div><div class="field full"><label>เกณฑ์เรียงอันดับ</label><select name="ranking_order"><option value="points,capped_diff,points_for,wins,name" ${t.ranking_rules.join(',') === 'points,capped_diff,points_for,wins,name' ? 'selected' : ''}>คะแนน → ผลต่างคะแนน → แต้มได้ → จำนวนชนะ → ชื่อทีม</option><option value="points,capped_diff,wins,points_for,name" ${t.ranking_rules.join(',') === 'points,capped_diff,wins,points_for,name' ? 'selected' : ''}>คะแนน → ผลต่างคะแนน → จำนวนชนะ → แต้มได้ → ชื่อทีม</option></select></div></div></section><section class="card settings-section publish-setting"><header><span class="settings-number">3</span><div><h3>การเผยแพร่</h3><p>เปิดเมื่อพร้อมให้ผู้ชมดูอันดับและผลการแข่งขัน</p></div></header><label class="toggle-field"><input type="checkbox" name="public_enabled" ${t.public_enabled ? 'checked' : ''} /><span class="toggle-ui"></span><span><strong>เปิดตารางคะแนนสาธารณะ</strong><small>ผู้ชมดูได้อย่างเดียว ไม่สามารถแก้ไขข้อมูล</small></span></label></section><div class="settings-save"><button class="button primary" type="submit">บันทึกการเปลี่ยนแปลง</button><span>การตั้งค่ามีผลกับทัวร์นาเมนต์นี้เท่านั้น</span></div></form>`;
 }
 
 function renderView() {
@@ -256,7 +303,8 @@ function renderView() {
 
 function renderModal() {
   if (!state.modal) return '';
-  return `<div class="modal-backdrop" data-action="close-modal-bg"><section class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(state.modal.title)}"><header class="modal-header"><h3>${escapeHtml(state.modal.title)}</h3><button class="icon-button" data-action="close-modal" aria-label="ปิด">×</button></header><div class="modal-body">${state.modal.body}</div></section></div>`;
+  const body = state.modal.kind === 'import-docx' ? renderDocxImportModal() : state.modal.body;
+  return `<div class="modal-backdrop" data-action="close-modal-bg"><section class="modal ${state.modal.kind === 'import-docx' ? 'modal-wide' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(state.modal.title)}"><header class="modal-header"><h3>${escapeHtml(state.modal.title)}</h3><button class="icon-button" data-action="close-modal" aria-label="ปิด">×</button></header><div class="modal-body">${body}</div></section></div>`;
 }
 
 function renderToasts() {
@@ -264,16 +312,18 @@ function renderToasts() {
 }
 
 function renderLogin() {
-  app.innerHTML = `<main class="login-screen"><section class="login-card"><div class="login-brand"><div class="brand-mark">KOTH</div><div><h1>A-Math KOTH Manager</h1><p>ระบบจัดการแข่งขันแบบ King of the Hill</p></div></div><form data-form="login"><div class="field full"><label>รหัสผ่านผู้ดูแลระบบ</label><input type="password" name="password" required autofocus placeholder="กรอกรหัสผ่านที่ตั้งบน Cloudflare" /></div><button class="button primary" type="submit" style="width:100%;margin-top:8px">เข้าสู่ระบบ</button></form><p class="small muted" style="margin-top:19px">หากเพิ่งติดตั้งระบบ ให้กำหนดตัวแปรลับ <code>ADMIN_PASSWORD</code> และ <code>AUTH_SECRET</code> บน Cloudflare ก่อน</p></section></main>`;
+  app.innerHTML = `<main class="login-screen"><section class="login-intro"><div class="brand-mark">A<span>MATH</span></div><span class="eyebrow">TOURNAMENT OPERATIONS</span><h1>จัดการแข่งขันให้ไหลลื่น<br>ตั้งแต่ทีมแรกถึงแชมป์</h1><p>ระบบจัด A-Math แบบ King of the Hill ที่พาผู้จัดทำงานตามลำดับ ลดการหลงหน้าและลดความผิดพลาดระหว่างแข่งขัน</p><div class="login-points"><span><b>1</b> เตรียมทีม</span><span><b>2</b> แข่งขัน</span><span><b>3</b> ประกาศผล</span></div></section><section class="login-card"><div><span class="eyebrow">ผู้จัดการแข่งขัน</span><h2>เข้าสู่ระบบ</h2><p>ใช้รหัสผ่านสำหรับผู้ดูแลระบบ</p></div><form data-form="login"><div class="field full"><label>รหัสผ่าน</label><input type="password" name="password" required autofocus autocomplete="current-password" placeholder="กรอกรหัสผ่านผู้ดูแล" /></div><button class="button primary" type="submit">เข้าสู่ศูนย์ควบคุม <span aria-hidden="true">→</span></button></form><details class="login-help"><summary>เพิ่งติดตั้งระบบครั้งแรก?</summary><p>กำหนดค่า <code>ADMIN_PASSWORD</code> และ <code>AUTH_SECRET</code> บน Cloudflare ก่อนเข้าสู่ระบบ</p></details></section></main>`;
 }
 
 function render() {
   if (!state.authenticated) { renderLogin(); return; }
-  app.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">KOTH</div><div><h1>A-Math Manager</h1><small>King of the Hill</small></div></div><nav class="nav-list">${navItems.map(([id, label]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}">${label}</button>`).join('')}</nav><div class="sidebar-footer">ข้อมูลเก็บในฐานข้อมูลของคุณบน Cloudflare D1<br><button data-action="logout">ออกจากระบบ</button></div></aside><main class="main">${pageHeading()}${renderView()}</main></div>${renderModal()}${renderToasts()}`;
+  const tournament = state.data?.tournament;
+  app.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">A<span>MATH</span></div><div><h1>Tournament Desk</h1><small>King of the Hill</small></div></div><div class="nav-caption">ลำดับการทำงาน</div><nav class="nav-list">${navItems.map(([id, label, number]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}><span>${number}</span>${label}</button>`).join('')}</nav><div class="nav-caption utility-caption">จัดการระบบ</div><nav class="nav-list utility-nav">${utilityNavItems.map(([id, label]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}>${label}</button>`).join('')}</nav><div class="sidebar-footer">${tournament ? `<span class="sidebar-status"><i class="${escapeHtml(tournament.status)}"></i>${tournament.status === 'draft' ? 'กำลังเตรียมรายการ' : tournament.status === 'open' ? 'กำลังแข่งขัน' : 'รายการเสร็จสิ้น'}</span>` : ''}<button data-action="logout">ออกจากระบบ</button></div></aside><main class="main">${pageHeading()}${renderView()}</main></div>${renderModal()}${renderToasts()}`;
 }
 
 function editTeamModal(team) {
-  state.modal = { title: `แก้ไขทีม: ${team.name}`, body: `<form data-form="edit-team" data-team-id="${escapeHtml(team.id)}" class="form-grid"><div class="field"><label>Seed</label><input type="number" min="1" name="seed" value="${team.seed}" /></div><div class="field"><label>รหัสทีม</label><input name="code" value="${escapeHtml(team.code)}" /></div><div class="field wide"><label>ชื่อทีม *</label><input name="name" required value="${escapeHtml(team.name)}" /></div><div class="field full"><label>โรงเรียน / สังกัด</label><input name="school" value="${escapeHtml(team.school)}" /></div><div class="field"><label>ผู้เข้าแข่งขัน 1</label><input name="member_1" value="${escapeHtml(team.member_1)}" /></div><div class="field"><label>ผู้เข้าแข่งขัน 2</label><input name="member_2" value="${escapeHtml(team.member_2)}" /></div><div class="field"><label>ครูผู้ควบคุม</label><input name="coach" value="${escapeHtml(team.coach)}" /></div><div class="field wide"><label>ติดต่อ</label><input name="contact" value="${escapeHtml(team.contact)}" /></div><div class="field full"><label>หมายเหตุ</label><textarea name="notes">${escapeHtml(team.notes)}</textarea></div><div class="field full"><button class="button primary" type="submit">บันทึกทีม</button></div></form>` };
+  const participant = (number) => `<section class="participant-editor field full"><h4>ผู้แข่งขันคนที่ ${number}</h4><div class="form-grid"><div class="field wide"><label>ชื่อ–นามสกุล</label><input name="member_${number}" value="${escapeHtml(team[`member_${number}`])}" /></div><div class="field"><label>ระดับชั้น / ห้อง</label><input name="member_${number}_level" value="${escapeHtml(team[`member_${number}_level`])}" /></div><div class="field"><label>เลขประจำตัวนักเรียน</label><input name="member_${number}_student_id" value="${escapeHtml(team[`member_${number}_student_id`])}" /></div><div class="field"><label>เบอร์โทรศัพท์</label><input name="member_${number}_phone" value="${escapeHtml(team[`member_${number}_phone`])}" /></div></div></section>`;
+  state.modal = { title: `แก้ไขทีม: ${team.name}`, body: `<form data-form="edit-team" data-team-id="${escapeHtml(team.id)}" class="form-grid"><div class="field"><label>Seed</label><input type="number" min="1" name="seed" value="${team.seed}" /></div><div class="field"><label>รหัสทีม</label><input name="code" value="${escapeHtml(team.code)}" /></div><div class="field wide"><label>ชื่อทีม *</label><input name="name" required value="${escapeHtml(team.name)}" /></div><div class="field wide"><label>โรงเรียน / สังกัด</label><input name="school" value="${escapeHtml(team.school)}" /></div><div class="field"><label>จังหวัด</label><input name="province" value="${escapeHtml(team.province)}" /></div>${participant(1)}${participant(2)}<div class="field"><label>ครูผู้ควบคุม</label><input name="coach" value="${escapeHtml(team.coach)}" /></div><div class="field wide"><label>ข้อมูลติดต่อทีม</label><input name="contact" value="${escapeHtml(team.contact)}" /></div><div class="field full"><label>หมายเหตุ</label><textarea name="notes">${escapeHtml(team.notes)}</textarea></div><div class="field full"><button class="button primary" type="submit">บันทึกข้อมูลทีม</button></div></form>` };
   render();
 }
 
@@ -291,6 +341,143 @@ function pairingModal(roundId) {
   render();
 }
 
+function openDocxImport() {
+  state.docxPreview = null;
+  state.docxSourceName = '';
+  state.modal = { kind: 'import-docx', title: 'นำเข้ารายชื่อผู้แข่งขันจาก Word' };
+  render();
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('ไม่สามารถโหลดแม่แบบ Master Score Card ได้'));
+    image.src = src;
+  });
+}
+
+function canvasBlob(canvas) {
+  return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('สร้างภาพเอกสารไม่สำเร็จ')), 'image/jpeg', 0.95));
+}
+
+function drawFittedText(context, value, x, y, maxWidth, options = {}) {
+  const text = String(value ?? '').trim();
+  if (!text) return;
+  const align = options.align || 'left';
+  const weight = options.weight || 700;
+  let size = options.size || 17;
+  context.textAlign = align;
+  context.textBaseline = 'middle';
+  context.fillStyle = options.color || '#073785';
+  do {
+    context.font = `${weight} ${size}px "IBM Plex Sans Thai", "Noto Sans Thai", sans-serif`;
+    if (context.measureText(text).width <= maxWidth || size <= 9) break;
+    size -= 1;
+  } while (size > 8);
+  context.fillText(text, x, y, maxWidth);
+}
+
+function teamMatchHistory(team) {
+  const scoring = state.data.tournament.scoring;
+  let accumulatedPoints = 0;
+  let accumulatedDiff = 0;
+  return state.data.rounds.filter((round) => round.phase === 'koth').map((round) => {
+    const match = round.matches.find((item) => item.team_a_id === team.id || item.team_b_id === team.id);
+    if (!match) return null;
+    const sideA = match.team_a_id === team.id;
+    const opponent = sideA ? match.team_b : match.team_a;
+    const final = match.status === 'final';
+    const storedResult = final ? (sideA ? match.result_a : match.result_b) : '';
+    const result = match.is_bye ? 'BYE' : storedResult === 'D' ? 'T' : storedResult;
+    const scoreFor = final ? Number(sideA ? match.score_a : match.score_b) : null;
+    const scoreAgainst = final ? Number(sideA ? match.score_b : match.score_a) : null;
+    const diff = final && !match.is_bye ? scoreFor - scoreAgainst : 0;
+    const points = result === 'W' ? scoring.win_points : result === 'T' ? scoring.draw_points : result === 'L' ? scoring.loss_points : result === 'BYE' ? scoring.bye_points : 0;
+    if (final) {
+      accumulatedPoints += Number(points || 0);
+      accumulatedDiff += diff;
+    }
+    return {
+      table: match.table_no,
+      round: round.round_number,
+      result,
+      points: final ? accumulatedPoints : '',
+      scoreFor: final && !match.is_bye ? scoreFor : '',
+      scoreAgainst: final && !match.is_bye ? scoreAgainst : '',
+      diff: final && !match.is_bye ? (diff > 0 ? `+${diff}` : String(diff)) : '',
+      accumulatedDiff: final ? (accumulatedDiff > 0 ? `+${accumulatedDiff}` : String(accumulatedDiff)) : '',
+      opponentName: match.is_bye ? 'BYE' : opponent?.name || '',
+      opponentSchool: match.is_bye ? '' : opponent?.school || '',
+      opponentCode: match.is_bye ? '' : opponent?.code || '',
+      starter: match.starter_team_id ? (match.starter_team_id === team.id ? '1' : '2') : ''
+    };
+  }).filter(Boolean).slice(0, 12);
+}
+
+function drawMasterCard(context, template, team, mode) {
+  context.clearRect(0, 0, 1536, 1024);
+  context.drawImage(template, 0, 0, 1536, 1024);
+  const ranking = state.data.standings.find((row) => row.id === team.id)?.rank;
+  drawFittedText(context, team.code, 1293, 105, 120, { align: 'center', size: 20 });
+  drawFittedText(context, mode === 'complete' ? ranking : team.seed, 1435, 105, 110, { align: 'center', size: 20 });
+
+  drawFittedText(context, team.member_1, 265, 263, 285, { size: 16 });
+  drawFittedText(context, team.member_1_level || team.member_1_room, 615, 263, 118, { size: 15 });
+  drawFittedText(context, team.school, 235, 310, 320, { size: 15 });
+  drawFittedText(context, team.province, 610, 310, 120, { size: 15 });
+  drawFittedText(context, team.member_1_student_id, 305, 357, 200, { size: 14 });
+  drawFittedText(context, team.member_1_phone, 600, 357, 135, { size: 14 });
+
+  drawFittedText(context, team.member_2, 882, 263, 330, { size: 16 });
+  drawFittedText(context, team.member_2_level || team.member_2_room, 1260, 263, 120, { size: 15 });
+  drawFittedText(context, team.school, 850, 310, 370, { size: 15 });
+  drawFittedText(context, team.province, 1255, 310, 135, { size: 15 });
+  drawFittedText(context, team.member_2_student_id, 930, 357, 235, { size: 14 });
+  drawFittedText(context, team.member_2_phone, 1250, 357, 140, { size: 14 });
+
+  if (mode !== 'complete') return;
+  const columns = [66, 153, 223, 321, 453, 574, 688, 804, 951, 1147, 1328, 1455];
+  teamMatchHistory(team).forEach((match, index) => {
+    const y = 503 + index * 38.7;
+    const values = [match.table, match.round, match.result, match.points, match.scoreFor, match.scoreAgainst, match.diff, match.accumulatedDiff, match.opponentName, match.opponentSchool, match.opponentCode, match.starter];
+    const widths = [70, 64, 50, 115, 105, 105, 100, 105, 160, 198, 128, 88];
+    values.forEach((value, columnIndex) => drawFittedText(context, value, columns[columnIndex], y, widths[columnIndex], { align: 'center', size: columnIndex >= 8 ? 12 : 14, weight: columnIndex >= 8 ? 600 : 700 }));
+  });
+}
+
+async function exportMasterCards(mode) {
+  if (!state.data) return;
+  const teams = state.data.teams.filter((team) => team.is_active);
+  if (!teams.length) { notify('ยังไม่มีทีมสำหรับสร้าง Master Score Card', 'error'); return; }
+  if (!window.PDFLib?.PDFDocument) { notify('เครื่องมือสร้าง PDF ยังโหลดไม่สำเร็จ กรุณารีเฟรชหน้า', 'error'); return; }
+  notify(`กำลังสร้าง Master Score Card ${teams.length} หน้า…`);
+  try {
+    await document.fonts?.ready;
+    const template = await loadImage('/assets/master-score-card.png');
+    const canvas = document.createElement('canvas');
+    canvas.width = 1536;
+    canvas.height = 1024;
+    const context = canvas.getContext('2d');
+    const pdf = await window.PDFLib.PDFDocument.create();
+    for (const team of teams) {
+      drawMasterCard(context, template, team, mode);
+      const blob = await canvasBlob(canvas);
+      const image = await pdf.embedJpg(await blob.arrayBuffer());
+      const page = pdf.addPage([841.89, 595.28]);
+      page.drawImage(image, { x: 0, y: 0, width: 841.89, height: 595.28 });
+    }
+    pdf.setTitle(`Master Score Card - ${state.data.tournament.name}`);
+    pdf.setSubject('A-Math Master Score Card');
+    pdf.setCreator('A-Math Tournament Desk');
+    const bytes = await pdf.save();
+    download(`Master_Score_Card_${slug(state.data.tournament.name)}_${mode === 'complete' ? 'results' : 'blank'}.pdf`, bytes, 'application/pdf');
+    notify(`สร้าง Master Score Card ${teams.length} หน้าเรียบร้อย`, 'success');
+  } catch (error) {
+    notify(`สร้าง PDF ไม่สำเร็จ: ${error.message}`, 'error');
+  }
+}
+
 async function handleAction(event) {
   const button = event.target.closest('[data-action]');
   if (!button) return;
@@ -302,6 +489,8 @@ async function handleAction(event) {
   if (action === 'go-koth') { state.view = 'koth'; render(); return; }
   if (action === 'go-standings') { state.view = 'standings'; render(); return; }
   if (action === 'new-tournament') { tournamentModal(); return; }
+  if (action === 'import-docx') { openDocxImport(); return; }
+  if (action === 'export-master-card') { await exportMasterCards(button.dataset.mode || 'blank'); return; }
   if (action === 'select-tournament') { setSelected(button.dataset.id); state.view = 'dashboard'; await loadTournament(); render(); return; }
   if (action === 'edit-team') { const team = state.data?.teams.find((item) => item.id === button.dataset.id); if (team) editTeamModal(team); return; }
   if (action === 'restore-team') {
@@ -374,6 +563,32 @@ async function handleSubmit(event) {
       await api(`/api/tournaments/${state.selectedId}/teams/import`, { method: 'POST', body: JSON.stringify({ teams }) });
       form.reset(); await loadTournament(); render(); notify(`นำเข้าทีม ${teams.length} ทีมแล้ว`, 'success'); return;
     }
+    if (kind === 'commit-docx-import') {
+      const groups = state.docxPreview.groups.map((group, groupIndex) => {
+        if (!form.querySelector(`[name="group_${groupIndex}"]`)?.checked) return null;
+        const teams = group.teams.filter((_, teamIndex) => form.querySelector(`[name="team_${groupIndex}_${teamIndex}"]`)?.checked);
+        if (!teams.length) return null;
+        return {
+          name: values[`name_${groupIndex}`],
+          academic_year: values[`year_${groupIndex}`],
+          category: values[`category_${groupIndex}`],
+          school: values[`school_${groupIndex}`],
+          organizer: values[`school_${groupIndex}`],
+          province: values[`province_${groupIndex}`],
+          rounds_planned: values[`rounds_${groupIndex}`],
+          teams
+        };
+      }).filter(Boolean);
+      if (!groups.length) throw new Error('กรุณาเลือกอย่างน้อยหนึ่งทีมสำหรับนำเข้า');
+      const response = await api('/api/documents/docx/commit', { method: 'POST', body: JSON.stringify({ source_name: state.docxSourceName, groups }) });
+      state.modal = null;
+      state.docxPreview = null;
+      setSelected(response.created[0].id);
+      state.view = 'dashboard';
+      await refreshAll();
+      notify(`สร้าง ${response.created.length} ทัวร์นาเมนต์จาก Word เรียบร้อย`, 'success');
+      return;
+    }
     if (kind === 'edit-team') {
       await api(`/api/tournaments/${state.selectedId}/teams/${form.dataset.teamId}`, { method: 'PATCH', body: JSON.stringify(values) });
       state.modal = null; await loadTournament(); render(); notify('บันทึกข้อมูลทีมแล้ว', 'success'); return;
@@ -408,6 +623,28 @@ async function handleSubmit(event) {
 
 async function handleChange(event) {
   if (event.target.id === 'tournament-selector') { setSelected(event.target.value); await loadTournament(); render(); return; }
+  if (event.target.id === 'docx-file' && event.target.files?.[0]) {
+    const file = event.target.files[0];
+    if (!file.name.toLowerCase().endsWith('.docx')) { notify('กรุณาเลือกไฟล์ Word .docx', 'error'); return; }
+    state.docxSourceName = file.name;
+    state.docxLoading = true;
+    render();
+    try {
+      const response = await fetch('/api/documents/docx/preview', {
+        method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/octet-stream', 'x-file-name': encodeURIComponent(file.name) }, body: file
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || 'อ่านไฟล์ Word ไม่สำเร็จ');
+      state.docxPreview = payload.preview;
+    } catch (error) {
+      state.docxPreview = null;
+      notify(error.message, 'error');
+    } finally {
+      state.docxLoading = false;
+      render();
+    }
+    return;
+  }
   if (event.target.id === 'backup-file' && event.target.files?.[0]) {
     try {
       const text = await event.target.files[0].text();

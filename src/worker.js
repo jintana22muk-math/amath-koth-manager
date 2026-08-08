@@ -9,6 +9,7 @@ import {
   slugify,
   toInt
 } from './core.js';
+import { parseDocxRegistration } from './documents.js';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -207,8 +208,17 @@ function validateTeamInput(input) {
     code: safeString(input.code, 24),
     name,
     school: safeString(input.school, 160),
+    province: safeString(input.province, 100),
     member_1: safeString(input.member_1, 120),
+    member_1_level: safeString(input.member_1_level, 60),
+    member_1_room: safeString(input.member_1_room, 60),
+    member_1_student_id: safeString(input.member_1_student_id, 40),
+    member_1_phone: safeString(input.member_1_phone, 40),
     member_2: safeString(input.member_2, 120),
+    member_2_level: safeString(input.member_2_level, 60),
+    member_2_room: safeString(input.member_2_room, 60),
+    member_2_student_id: safeString(input.member_2_student_id, 40),
+    member_2_phone: safeString(input.member_2_phone, 40),
     coach: safeString(input.coach, 120),
     contact: safeString(input.contact, 160),
     notes: safeString(input.notes, 500),
@@ -282,9 +292,18 @@ async function addTeam(request, env, tournamentId) {
   const code = input.code || `T${String(toInt(count?.total, 0) + 1).padStart(2, '0')}`;
   const teamId = id();
   try {
-    await env.DB.prepare(`INSERT INTO teams (id, tournament_id, seed, code, name, school, member_1, member_2, coach, contact, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(teamId, tournamentId, input.seed === 9999 ? toInt(maxSeed?.max_seed, 0) + 1 : input.seed, code, input.name, input.school, input.member_1, input.member_2, input.coach, input.contact, input.notes, now()).run();
+    await env.DB.prepare(`INSERT INTO teams (
+      id, tournament_id, seed, code, name, school, province,
+      member_1, member_1_level, member_1_room, member_1_student_id, member_1_phone,
+      member_2, member_2_level, member_2_room, member_2_student_id, member_2_phone,
+      coach, contact, notes, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(
+        teamId, tournamentId, input.seed === 9999 ? toInt(maxSeed?.max_seed, 0) + 1 : input.seed, code, input.name, input.school, input.province,
+        input.member_1, input.member_1_level, input.member_1_room, input.member_1_student_id, input.member_1_phone,
+        input.member_2, input.member_2_level, input.member_2_room, input.member_2_student_id, input.member_2_phone,
+        input.coach, input.contact, input.notes, now()
+      ).run();
   } catch (cause) {
     return error('รหัสทีมซ้ำ กรุณาใช้รหัสอื่น', 409, String(cause));
   }
@@ -302,8 +321,16 @@ async function updateTeam(request, env, tournamentId, teamId) {
   const code = input.code || existing.code;
   const isActive = patch.is_active === undefined ? Number(existing.is_active) : (patch.is_active ? 1 : 0);
   try {
-    await env.DB.prepare(`UPDATE teams SET seed=?, code=?, name=?, school=?, member_1=?, member_2=?, coach=?, contact=?, notes=?, is_active=?, updated_at=? WHERE id=?`)
-      .bind(input.seed, code, input.name, input.school, input.member_1, input.member_2, input.coach, input.contact, input.notes, isActive, now(), teamId).run();
+    await env.DB.prepare(`UPDATE teams SET seed=?, code=?, name=?, school=?, province=?,
+      member_1=?, member_1_level=?, member_1_room=?, member_1_student_id=?, member_1_phone=?,
+      member_2=?, member_2_level=?, member_2_room=?, member_2_student_id=?, member_2_phone=?,
+      coach=?, contact=?, notes=?, is_active=?, updated_at=? WHERE id=?`)
+      .bind(
+        input.seed, code, input.name, input.school, input.province,
+        input.member_1, input.member_1_level, input.member_1_room, input.member_1_student_id, input.member_1_phone,
+        input.member_2, input.member_2_level, input.member_2_room, input.member_2_student_id, input.member_2_phone,
+        input.coach, input.contact, input.notes, isActive, now(), teamId
+      ).run();
   } catch (cause) {
     return error('รหัสทีมซ้ำ กรุณาใช้รหัสอื่น', 409, String(cause));
   }
@@ -353,13 +380,114 @@ async function importTeams(request, env, tournamentId) {
     let suffix = 2;
     while (used.has(code.toLowerCase())) code = `${base}-${suffix++}`;
     used.add(code.toLowerCase());
-    statements.push(env.DB.prepare(`INSERT INTO teams (id, tournament_id, seed, code, name, school, member_1, member_2, coach, contact, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id(), tournamentId, team.seed === 9999 ? seed : team.seed, code, team.name, team.school, team.member_1, team.member_2, team.coach, team.contact, team.notes, now()));
+    statements.push(env.DB.prepare(`INSERT INTO teams (
+      id, tournament_id, seed, code, name, school, province,
+      member_1, member_1_level, member_1_room, member_1_student_id, member_1_phone,
+      member_2, member_2_level, member_2_room, member_2_student_id, member_2_phone,
+      coach, contact, notes, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(
+        id(), tournamentId, team.seed === 9999 ? seed : team.seed, code, team.name, team.school, team.province,
+        team.member_1, team.member_1_level, team.member_1_room, team.member_1_student_id, team.member_1_phone,
+        team.member_2, team.member_2_level, team.member_2_room, team.member_2_student_id, team.member_2_phone,
+        team.coach, team.contact, team.notes, now()
+      ));
   }
   await env.DB.batch(statements);
   await audit(env, tournamentId, 'team.import', { count: statements.length });
   return json({ ok: true, imported: statements.length });
+}
+
+async function previewDocxImport(request) {
+  const length = toInt(request.headers.get('content-length'), 0);
+  if (length > 8 * 1024 * 1024) return error('ไฟล์ Word ต้องมีขนาดไม่เกิน 8 MB');
+  const buffer = await request.arrayBuffer();
+  if (!buffer.byteLength) return error('กรุณาเลือกไฟล์ Word .docx');
+  if (buffer.byteLength > 8 * 1024 * 1024) return error('ไฟล์ Word ต้องมีขนาดไม่เกิน 8 MB');
+  const preview = parseDocxRegistration(buffer);
+  if (preview.team_count > 500) return error('เอกสารมีรายชื่อเกิน 500 ทีม กรุณาแบ่งเป็นหลายไฟล์');
+  return json({ ok: true, preview });
+}
+
+async function reserveTournamentCode(env, suggested, reserved) {
+  const base = slugify(suggested);
+  for (let suffix = 0; suffix < 1000; suffix += 1) {
+    const code = suffix ? `${base}-${suffix + 1}` : base;
+    if (reserved.has(code)) continue;
+    const existing = await env.DB.prepare('SELECT id FROM tournaments WHERE code = ?').bind(code).first();
+    if (!existing) {
+      reserved.add(code);
+      return code;
+    }
+  }
+  const fallback = `${base}-${id().slice(0, 6)}`;
+  reserved.add(fallback);
+  return fallback;
+}
+
+async function commitDocxImport(request, env) {
+  const payload = await bodyJson(request);
+  const groups = Array.isArray(payload.groups) ? payload.groups : [];
+  if (!groups.length) return error('กรุณาเลือกอย่างน้อยหนึ่งกลุ่มสำหรับสร้างทัวร์นาเมนต์');
+  if (groups.length > 10) return error('สร้างได้ครั้งละไม่เกิน 10 ทัวร์นาเมนต์');
+  const totalTeams = groups.reduce((sum, group) => sum + (Array.isArray(group.teams) ? group.teams.length : 0), 0);
+  if (!totalTeams) return error('ไม่พบทีมที่เลือกสำหรับนำเข้า');
+  if (totalTeams > 500) return error('นำเข้าได้ครั้งละไม่เกิน 500 ทีม');
+
+  const statements = [];
+  const created = [];
+  const reservedCodes = new Set();
+  for (const [groupIndex, group] of groups.entries()) {
+    const teams = Array.isArray(group.teams) ? group.teams : [];
+    if (!teams.length) continue;
+    const name = safeString(group.name, 160);
+    if (!name) return error(`กรุณาตั้งชื่อทัวร์นาเมนต์กลุ่มที่ ${groupIndex + 1}`);
+    const tournamentId = id();
+    const code = await reserveTournamentCode(env, group.code || name, reservedCodes);
+    const category = safeString(group.category || 'A-Math', 80);
+    const scoring = normalizeScoring(group.scoring);
+    const rules = normalizeRules(group.ranking_rules);
+    const timestamp = now();
+    statements.push(env.DB.prepare(`INSERT INTO tournaments (
+      id, code, name, academic_year, category, organizer, venue, starts_on, ends_on,
+      rounds_planned, scoring_json, ranking_rules_json, status, public_enabled, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, 'draft', 0, ?)`)
+      .bind(
+        tournamentId, code, name, safeString(group.academic_year, 50), category,
+        safeString(group.organizer, 160), safeString(group.venue, 160),
+        Math.max(1, Math.min(99, toInt(group.rounds_planned, 5))), JSON.stringify(scoring), JSON.stringify(rules), timestamp
+      ));
+    const prefix = category.includes('ต้น') ? 'JR' : category.includes('ปลาย') ? 'SR' : 'T';
+    teams.forEach((rawTeam, index) => {
+      const team = validateTeamInput({
+        ...rawTeam,
+        school: rawTeam.school || group.school,
+        province: rawTeam.province || group.province,
+        member_1_level: rawTeam.member_1_level || rawTeam.member_1_room || rawTeam.level,
+        member_2_level: rawTeam.member_2_level || rawTeam.member_2_room || rawTeam.level,
+        notes: rawTeam.notes || `นำเข้าจาก ${safeString(payload.source_name || 'เอกสาร Word', 160)}`
+      });
+      const teamCode = team.code || `${prefix}${String(index + 1).padStart(2, '0')}`;
+      statements.push(env.DB.prepare(`INSERT INTO teams (
+        id, tournament_id, seed, code, name, school, province,
+        member_1, member_1_level, member_1_room, member_1_student_id, member_1_phone,
+        member_2, member_2_level, member_2_room, member_2_student_id, member_2_phone,
+        coach, contact, notes, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(
+          id(), tournamentId, index + 1, teamCode, team.name, team.school, team.province,
+          team.member_1, team.member_1_level, team.member_1_room, team.member_1_student_id, team.member_1_phone,
+          team.member_2, team.member_2_level, team.member_2_room, team.member_2_student_id, team.member_2_phone,
+          team.coach, team.contact, team.notes, timestamp
+        ));
+    });
+    statements.push(env.DB.prepare('INSERT INTO audit_logs (id, tournament_id, action, detail_json) VALUES (?, ?, ?, ?)')
+      .bind(id(), tournamentId, 'tournament.import.docx', JSON.stringify({ source: safeString(payload.source_name, 160), teamCount: teams.length })));
+    created.push({ id: tournamentId, code, name, team_count: teams.length });
+  }
+  if (!created.length) return error('ไม่พบกลุ่มที่มีทีมสำหรับนำเข้า');
+  await env.DB.batch(statements);
+  return json({ ok: true, created }, 201);
 }
 
 function shuffle(items) {
@@ -510,8 +638,11 @@ async function updateMatch(request, env, matchId) {
   } else {
     scoreA = null; scoreB = null;
   }
-  await env.DB.prepare(`UPDATE matches SET score_a=?, score_b=?, result_a=?, result_b=?, winner_team_id=?, status=?, notes=?, updated_at=? WHERE id=?`)
-    .bind(scoreA, scoreB, resultA, resultB, winner, status, safeString(input.notes, 500), now(), matchId).run();
+  const starterTeamId = [match.team_a_id, match.team_b_id].includes(input.starter_team_id)
+    ? input.starter_team_id
+    : (input.starter_team_id === '' ? null : match.starter_team_id);
+  await env.DB.prepare(`UPDATE matches SET score_a=?, score_b=?, result_a=?, result_b=?, winner_team_id=?, starter_team_id=?, status=?, notes=?, updated_at=? WHERE id=?`)
+    .bind(scoreA, scoreB, resultA, resultB, winner, starterTeamId, status, safeString(input.notes, 500), now(), matchId).run();
   const roundStatus = await refreshRoundStatus(env, match.round_id);
   await audit(env, match.tournament_id, 'match.update', { matchId, roundId: match.round_id, status, roundStatus });
   return json({ ok: true, round_status: roundStatus, bundle: await getBundle(env, match.tournament_id) });
@@ -615,7 +746,7 @@ async function importTournament(request, env) {
   const sourceMatches = Array.isArray(payload.matches) ? payload.matches : [];
   if (sourceTeams.length > 300 || sourceRounds.length > 150 || sourceMatches.length > 5000) return error('ข้อมูลสำรองมีขนาดเกินขอบเขตที่ระบบรับได้');
   const tournamentId = id();
-  const code = await uniqueCode(`${sourceTournament.code || sourceTournament.name || 'koth'}-copy`);
+  const code = await uniqueCode(env, `${sourceTournament.code || sourceTournament.name || 'koth'}-copy`);
   const teamMap = new Map(sourceTeams.map((team) => [team.id, id()]));
   const roundMap = new Map(sourceRounds.map((round) => [round.id, id()]));
   const scoring = normalizeScoring(sourceTournament.scoring || parseJson(sourceTournament.scoring_json, DEFAULT_SCORING));
@@ -626,9 +757,18 @@ async function importTournament(request, env) {
       .bind(tournamentId, code, `${safeString(sourceTournament.name, 140)} (สำเนา)`, safeString(sourceTournament.academic_year, 50), safeString(sourceTournament.category || 'A-Math', 80), safeString(sourceTournament.organizer, 160), safeString(sourceTournament.venue, 160), safeString(sourceTournament.starts_on, 20), safeString(sourceTournament.ends_on, 20), Math.max(1, toInt(sourceTournament.rounds_planned, 5)), JSON.stringify(scoring), JSON.stringify(rules), ['draft', 'open', 'completed'].includes(sourceTournament.status) ? sourceTournament.status : 'draft', sourceTournament.public_enabled ? 1 : 0, now())
   ];
   for (const source of sourceTeams) {
-    statements.push(env.DB.prepare(`INSERT INTO teams (id,tournament_id,seed,code,name,school,member_1,member_2,coach,contact,notes,is_active,updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(teamMap.get(source.id), tournamentId, Math.max(1, toInt(source.seed, 9999)), safeString(source.code, 24), safeString(source.name, 120), safeString(source.school, 160), safeString(source.member_1, 120), safeString(source.member_2, 120), safeString(source.coach, 120), safeString(source.contact, 160), safeString(source.notes, 500), source.is_active === false ? 0 : 1, now()));
+    statements.push(env.DB.prepare(`INSERT INTO teams (
+      id,tournament_id,seed,code,name,school,province,
+      member_1,member_1_level,member_1_room,member_1_student_id,member_1_phone,
+      member_2,member_2_level,member_2_room,member_2_student_id,member_2_phone,
+      coach,contact,notes,is_active,updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(
+        teamMap.get(source.id), tournamentId, Math.max(1, toInt(source.seed, 9999)), safeString(source.code, 24), safeString(source.name, 120), safeString(source.school, 160), safeString(source.province, 100),
+        safeString(source.member_1, 120), safeString(source.member_1_level, 60), safeString(source.member_1_room, 60), safeString(source.member_1_student_id, 40), safeString(source.member_1_phone, 40),
+        safeString(source.member_2, 120), safeString(source.member_2_level, 60), safeString(source.member_2_room, 60), safeString(source.member_2_student_id, 40), safeString(source.member_2_phone, 40),
+        safeString(source.coach, 120), safeString(source.contact, 160), safeString(source.notes, 500), source.is_active === false ? 0 : 1, now()
+      ));
   }
   for (const source of sourceRounds) {
     statements.push(env.DB.prepare(`INSERT INTO rounds (id,tournament_id,phase,round_number,title,diff_cap,status,pairing_note,updated_at)
@@ -637,10 +777,10 @@ async function importTournament(request, env) {
   }
   for (const source of sourceMatches) {
     if (!roundMap.has(source.round_id) || !teamMap.has(source.team_a_id)) continue;
-    statements.push(env.DB.prepare(`INSERT INTO matches (id,round_id,table_no,team_a_id,team_b_id,score_a,score_b,result_a,result_b,winner_team_id,is_bye,status,notes,updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    statements.push(env.DB.prepare(`INSERT INTO matches (id,round_id,table_no,team_a_id,team_b_id,score_a,score_b,result_a,result_b,winner_team_id,starter_team_id,is_bye,status,notes,updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id(), roundMap.get(source.round_id), Math.max(1, toInt(source.table_no, 1)), teamMap.get(source.team_a_id), source.team_b_id ? teamMap.get(source.team_b_id) || null : null,
-        source.score_a === null ? null : toInt(source.score_a, 0), source.score_b === null ? null : toInt(source.score_b, 0), safeString(source.result_a, 10), safeString(source.result_b, 10), source.winner_team_id ? teamMap.get(source.winner_team_id) || null : null, source.is_bye ? 1 : 0, source.status === 'final' ? 'final' : 'pending', safeString(source.notes, 500), now()));
+        source.score_a === null ? null : toInt(source.score_a, 0), source.score_b === null ? null : toInt(source.score_b, 0), safeString(source.result_a, 10), safeString(source.result_b, 10), source.winner_team_id ? teamMap.get(source.winner_team_id) || null : null, source.starter_team_id ? teamMap.get(source.starter_team_id) || null : null, source.is_bye ? 1 : 0, source.status === 'final' ? 'final' : 'pending', safeString(source.notes, 500), now()));
   }
   await env.DB.batch(statements);
   await audit(env, tournamentId, 'tournament.import', { sourceName: sourceTournament.name });
@@ -701,6 +841,8 @@ export default {
       if (request.method === 'GET' && path === '/api/tournaments') return json({ ok: true, tournaments: await listTournaments(env) });
       if (request.method === 'POST' && path === '/api/tournaments') return createTournament(request, env);
       if (request.method === 'POST' && path === '/api/tournaments/import') return importTournament(request, env);
+      if (request.method === 'POST' && path === '/api/documents/docx/preview') return previewDocxImport(request);
+      if (request.method === 'POST' && path === '/api/documents/docx/commit') return commitDocxImport(request, env);
 
       const parts = path.split('/').filter(Boolean);
       // /api/tournaments/:id
