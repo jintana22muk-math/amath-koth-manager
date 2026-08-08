@@ -276,6 +276,44 @@ async function updateTournament(request, env, tournamentId) {
   return json({ ok: true, tournament: await getTournament(env, tournamentId) });
 }
 
+async function deleteTournament(request, env, tournamentId) {
+  const tournament = await getTournament(env, tournamentId);
+  if (!tournament) return error('ไม่พบรายการแข่งขัน', 404);
+
+  const input = await bodyJson(request);
+  const confirmedName = safeString(input.confirm_name, 160);
+  if (confirmedName !== tournament.name) {
+    return error('ชื่อทัวร์นาเมนต์ที่พิมพ์ไม่ตรงกัน จึงยังไม่ได้ลบข้อมูล', 400);
+  }
+
+  const counts = await env.DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM teams WHERE tournament_id = ?) AS team_count,
+    (SELECT COUNT(*) FROM rounds WHERE tournament_id = ?) AS round_count,
+    (SELECT COUNT(*) FROM matches WHERE round_id IN (SELECT id FROM rounds WHERE tournament_id = ?)) AS match_count`)
+    .bind(tournamentId, tournamentId, tournamentId).first();
+  const deletedAt = now();
+  const detail = {
+    tournament_id: tournamentId,
+    name: tournament.name,
+    team_count: toInt(counts?.team_count),
+    round_count: toInt(counts?.round_count),
+    match_count: toInt(counts?.match_count),
+    deleted_at: deletedAt
+  };
+
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM matches WHERE round_id IN (SELECT id FROM rounds WHERE tournament_id = ?)').bind(tournamentId),
+    env.DB.prepare('DELETE FROM audit_logs WHERE tournament_id = ?').bind(tournamentId),
+    env.DB.prepare('DELETE FROM rounds WHERE tournament_id = ?').bind(tournamentId),
+    env.DB.prepare('DELETE FROM teams WHERE tournament_id = ?').bind(tournamentId),
+    env.DB.prepare('DELETE FROM tournaments WHERE id = ?').bind(tournamentId),
+    env.DB.prepare('INSERT INTO audit_logs (id, tournament_id, action, detail_json, created_at) VALUES (?, NULL, ?, ?, ?)')
+      .bind(id(), 'tournament.delete', JSON.stringify(detail), deletedAt)
+  ]);
+
+  return json({ ok: true, deleted: detail });
+}
+
 async function listTournaments(env) {
   const query = await env.DB.prepare(`SELECT t.*, 
     (SELECT COUNT(*) FROM teams x WHERE x.tournament_id = t.id AND x.is_active = 1) AS team_count,
@@ -853,6 +891,7 @@ export default {
           return bundle ? json({ ok: true, ...bundle, rounds: groupRounds(bundle), finals: await getFinalStatus(env, tournamentId) }) : error('ไม่พบรายการแข่งขัน', 404);
         }
         if (parts.length === 3 && request.method === 'PATCH') return updateTournament(request, env, tournamentId);
+        if (parts.length === 3 && request.method === 'DELETE') return deleteTournament(request, env, tournamentId);
         if (parts.length === 4 && parts[3] === 'teams' && request.method === 'GET') {
           const teams = await env.DB.prepare('SELECT * FROM teams WHERE tournament_id=? ORDER BY is_active DESC, seed ASC, name').bind(tournamentId).all();
           return json({ ok: true, teams: teams.results.map(asTeam) });
