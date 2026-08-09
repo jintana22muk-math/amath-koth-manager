@@ -56,10 +56,11 @@ test('document exports bundle and load TH Sarabun PSK faces', async () => {
   assert.match(app, /document\.fonts\.load\('700 24px "TH Sarabun PSK"'/);
   assert.match(app, /data-action="export-pairing-sheet"/);
   assert.match(app, /async function exportPairingSheet/);
-  assert.match(app, /const maxRowsPerPage = 10/);
+  assert.match(app, /const maxRowsPerPage = 8/);
   assert.match(app, /const rowsPerPage = Math\.ceil/);
-  assert.match(app, /cellWidth - 36, \{ size: 34, color: '#2f1e29' \}/);
-  assert.match(app, /cellWidth - 36, \{ size: 24, weight: 400, color: '#735f6d' \}/);
+  assert.match(app, /\[team\?\.member_1, team\?\.member_2\]\.filter\(Boolean\)\.join\(' \/ '\)/);
+  assert.match(app, /ผู้แข่งขัน: \$\{members \|\| 'ไม่ระบุรายชื่อ'\}/);
+  assert.match(app, /cellWidth - 36, \{ size: 20, weight: 400, color: '#735f6d' \}/);
   assert.match(app, /สร้างใบมาสเตอร์เปล่า \(PDF\)/);
   assert.match(app, /data-mode="empty"/);
   assert.match(app, /mode === 'empty' \? \[null\] : teams/);

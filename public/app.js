@@ -604,8 +604,10 @@ function drawPairingSheetPage(context, round, matches, pageIndex, pageCount) {
       drawFittedText(context, 'พักการแข่งขัน (BYE)', x + cellWidth / 2, y + rowHeight / 2, cellWidth - 30, { align: 'center', size: 32, color: '#7a3f65' });
       return;
     }
-    drawFittedText(context, `${team?.code || ''}  ${team?.name || '-'}`, x + 18, y + rowHeight / 2 - 18, cellWidth - 36, { size: 34, color: '#2f1e29' });
-    drawFittedText(context, team?.school || '', x + 18, y + rowHeight / 2 + 23, cellWidth - 36, { size: 24, weight: 400, color: '#735f6d' });
+    const members = [team?.member_1, team?.member_2].filter(Boolean).join(' / ');
+    drawFittedText(context, `${team?.code || ''}  ${team?.name || '-'}`, x + 18, y + rowHeight / 2 - 30, cellWidth - 36, { size: 32, color: '#2f1e29' });
+    drawFittedText(context, `ผู้แข่งขัน: ${members || 'ไม่ระบุรายชื่อ'}`, x + 18, y + rowHeight / 2 + 1, cellWidth - 36, { size: 22, color: '#5f3b51' });
+    drawFittedText(context, team?.school || '', x + 18, y + rowHeight / 2 + 32, cellWidth - 36, { size: 20, weight: 400, color: '#735f6d' });
   };
 
   matches.forEach((match, index) => {
@@ -663,7 +665,7 @@ async function exportPairingSheet(roundId) {
     canvas.height = 1240;
     const context = canvas.getContext('2d');
     const pdf = await window.PDFLib.PDFDocument.create();
-    const maxRowsPerPage = 10;
+    const maxRowsPerPage = 8;
     const pageCount = Math.ceil(round.matches.length / maxRowsPerPage);
     const rowsPerPage = Math.ceil(round.matches.length / pageCount);
     const pages = Array.from({ length: pageCount }, (_, index) => round.matches.slice(index * rowsPerPage, (index + 1) * rowsPerPage));
