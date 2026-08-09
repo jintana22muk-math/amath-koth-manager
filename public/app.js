@@ -116,6 +116,30 @@ function tournamentPicker() {
   return `<div class="tournament-switch"><label for="tournament-selector">กำลังจัดการทัวร์นาเมนต์</label><div class="select-wrap"><select id="tournament-selector">${state.tournaments.map((tournament) => `<option value="${escapeHtml(tournament.id)}" ${tournament.id === state.selectedId ? 'selected' : ''}>${escapeHtml(tournament.name)}${tournament.academic_year ? ` · ${escapeHtml(tournament.academic_year)}` : ''}</option>`).join('')}</select></div></div>`;
 }
 
+function renderMobileHeader(tournament) {
+  const name = tournament?.name || 'ระบบจัดการแข่งขัน A-Math';
+  const detail = tournament
+    ? [tournament.category, tournament.academic_year].filter(Boolean).join(' · ') || 'แตะเพื่อดูทัวร์นาเมนต์ทั้งหมด'
+    : 'ยังไม่ได้เลือกทัวร์นาเมนต์';
+  return `<header class="mobile-appbar"><div class="mobile-appbar-brand"><span class="mobile-appbar-logo">A</span><div><strong>${escapeHtml(short(name, 34))}</strong><span>${escapeHtml(detail)}</span></div></div><button class="mobile-appbar-switch" data-action="go-tournaments" type="button">เปลี่ยนรายการ</button></header>`;
+}
+
+function renderMobileNavigation() {
+  const utilityViews = new Set(['tournaments', 'reports', 'settings', 'admins']);
+  const item = (view, label, mark) => `<button class="mobile-tab-button ${state.view === view ? 'active' : ''}" data-action="nav" data-view="${view}" type="button" ${state.view === view ? 'aria-current="page"' : ''}><span class="mobile-tab-icon" aria-hidden="true">${mark}</span><span>${label}</span></button>`;
+  return `<nav class="mobile-tabbar" aria-label="เมนูหลักบนมือถือ"><div class="mobile-tabbar-inner">${item('dashboard', 'ภาพรวม', '⌂')}${item('teams', 'ทีม', '●●')}${item('koth', 'แข่งขัน', '×')}${item('standings', 'อันดับ', '★')}<button class="mobile-tab-button ${utilityViews.has(state.view) ? 'active' : ''}" data-action="open-mobile-more" type="button"><span class="mobile-tab-icon more" aria-hidden="true">•••</span><span>เพิ่มเติม</span></button></div></nav>`;
+}
+
+function openMobileMore() {
+  const menuItem = (view, mark, title, detail) => `<button class="mobile-more-item ${state.view === view ? 'active' : ''}" data-action="mobile-nav" data-view="${view}" type="button"><span class="mobile-more-mark" aria-hidden="true">${mark}</span><span><strong>${title}</strong><small>${detail}</small></span><b aria-hidden="true">›</b></button>`;
+  state.modal = {
+    kind: 'mobile-more',
+    title: 'เมนูเพิ่มเติม',
+    body: `<div class="mobile-more-menu"><span class="mobile-more-caption">จัดการรายการแข่งขัน</span>${menuItem('tournaments', 'ท', 'ทัวร์นาเมนต์ทั้งหมด', 'สร้าง สลับ หรือลบทัวร์นาเมนต์')}${menuItem('reports', 'อ', 'ศูนย์เอกสาร', 'นำเข้า ส่งออก และมาสเตอร์สกอร์การ์ด')}<span class="mobile-more-caption">ตั้งค่าระบบ</span>${menuItem('settings', 'ก', 'ตั้งค่าทัวร์นาเมนต์', 'ข้อมูลรายการ กติกาคะแนน และการเผยแพร่')}${menuItem('admins', 'ผ', 'จัดการผู้ดูแล', 'เพิ่มหรือลบบัญชีผู้ดูแล')}<button class="mobile-more-logout" data-action="logout" type="button">ออกจากระบบ</button></div>`
+  };
+  render();
+}
+
 function renderNoTournament() {
   return `<section class="empty-state card"><span class="empty-kicker">เริ่มต้นครั้งแรก</span><h2>สร้างทัวร์นาเมนต์แรกของคุณ</h2><p>ใช้เวลาไม่ถึง 1 นาที จากนั้นระบบจะพาไปเพิ่มทีม จับคู่ บันทึกผล และประกาศอันดับตามลำดับ</p><div class="hero-actions"><button class="button primary" data-action="new-tournament">สร้างทัวร์นาเมนต์</button>${state.tournaments.length ? '<button class="button secondary" data-action="go-tournaments">เลือกจากรายการเดิม</button>' : ''}</div></section>`;
 }
@@ -321,7 +345,8 @@ function renderView() {
 function renderModal() {
   if (!state.modal) return '';
   const body = state.modal.kind === 'import-docx' ? renderDocxImportModal() : state.modal.body;
-  return `<div class="modal-backdrop" data-action="close-modal-bg"><section class="modal ${state.modal.kind === 'import-docx' ? 'modal-wide' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(state.modal.title)}"><header class="modal-header"><h3>${escapeHtml(state.modal.title)}</h3><button class="icon-button" data-action="close-modal" aria-label="ปิด">×</button></header><div class="modal-body">${body}</div></section></div>`;
+  const modalClass = state.modal.kind === 'import-docx' ? 'modal-wide' : state.modal.kind === 'mobile-more' ? 'mobile-sheet' : '';
+  return `<div class="modal-backdrop ${state.modal.kind === 'mobile-more' ? 'mobile-sheet-backdrop' : ''}" data-action="close-modal-bg"><section class="modal ${modalClass}" role="dialog" aria-modal="true" aria-label="${escapeHtml(state.modal.title)}"><header class="modal-header"><h3>${escapeHtml(state.modal.title)}</h3><button class="icon-button" data-action="close-modal" aria-label="ปิด">×</button></header><div class="modal-body">${body}</div></section></div>`;
 }
 
 function renderToasts() {
@@ -335,7 +360,7 @@ function renderLogin() {
 function render() {
   if (!state.authenticated) { renderLogin(); return; }
   const tournament = state.data?.tournament;
-  app.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">A<span>MATH</span></div><div><h1>ศูนย์จัดการแข่งขัน</h1><small>คิงออฟเดอะฮิลล์ (KOTH)</small></div></div><div class="nav-caption">ลำดับการทำงาน</div><nav class="nav-list">${navItems.map(([id, label, number]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}><span>${number}</span>${label}</button>`).join('')}</nav><div class="nav-caption utility-caption">จัดการระบบ</div><nav class="nav-list utility-nav">${utilityNavItems.map(([id, label]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}>${label}</button>`).join('')}</nav><div class="sidebar-footer">${tournament ? `<span class="sidebar-status"><i class="${escapeHtml(tournament.status)}"></i>${tournament.status === 'draft' ? 'กำลังเตรียมรายการ' : tournament.status === 'open' ? 'กำลังแข่งขัน' : 'รายการเสร็จสิ้น'}</span>` : ''}<div class="sidebar-user"><strong>${escapeHtml(state.user?.display_name || 'ผู้ดูแล')}</strong><span>@${escapeHtml(state.user?.username || 'admin')}</span></div><button data-action="logout">ออกจากระบบ</button></div></aside><main class="main">${pageHeading()}${renderView()}</main></div>${renderModal()}${renderToasts()}`;
+  app.innerHTML = `<div class="app-shell">${renderMobileHeader(tournament)}<aside class="sidebar"><div class="brand"><div class="brand-mark">A<span>MATH</span></div><div><h1>ศูนย์จัดการแข่งขัน</h1><small>คิงออฟเดอะฮิลล์ (KOTH)</small></div></div><div class="nav-caption">ลำดับการทำงาน</div><nav class="nav-list">${navItems.map(([id, label, number]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}><span>${number}</span>${label}</button>`).join('')}</nav><div class="nav-caption utility-caption">จัดการระบบ</div><nav class="nav-list utility-nav">${utilityNavItems.map(([id, label]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}>${label}</button>`).join('')}</nav><div class="sidebar-footer">${tournament ? `<span class="sidebar-status"><i class="${escapeHtml(tournament.status)}"></i>${tournament.status === 'draft' ? 'กำลังเตรียมรายการ' : tournament.status === 'open' ? 'กำลังแข่งขัน' : 'รายการเสร็จสิ้น'}</span>` : ''}<div class="sidebar-user"><strong>${escapeHtml(state.user?.display_name || 'ผู้ดูแล')}</strong><span>@${escapeHtml(state.user?.username || 'admin')}</span></div><button data-action="logout">ออกจากระบบ</button></div></aside><main class="main">${pageHeading()}${renderView()}</main>${renderMobileNavigation()}</div>${renderModal()}${renderToasts()}`;
 }
 
 function editTeamModal(team) {
@@ -509,6 +534,17 @@ async function handleAction(event) {
   const action = button.dataset.action;
   if (action === 'close-modal-bg' && event.target !== button) return;
   if (action === 'nav') {
+    state.modal = null;
+    state.view = button.dataset.view;
+    if (state.view === 'admins') {
+      try { await loadAdmins(); } catch (error) { notify(error.message, 'error'); return; }
+    }
+    render();
+    return;
+  }
+  if (action === 'open-mobile-more') { openMobileMore(); return; }
+  if (action === 'mobile-nav') {
+    state.modal = null;
     state.view = button.dataset.view;
     if (state.view === 'admins') {
       try { await loadAdmins(); } catch (error) { notify(error.message, 'error'); return; }
