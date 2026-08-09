@@ -20,6 +20,10 @@ import {
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
+// The manager can run inside a cross-site iframe (for example, kru-ti.com).
+// CHIPS keeps that embedded session isolated to the top-level site instead of
+// relying on an unrestricted third-party cookie.
+const SESSION_COOKIE_ATTRIBUTES = 'Path=/; HttpOnly; Secure; SameSite=None; Partitioned';
 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), { status, headers: { ...JSON_HEADERS, ...headers } });
@@ -141,11 +145,11 @@ async function verifySession(request, env) {
 }
 
 function sessionCookie(token) {
-  return `session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
+  return `session=${token}; ${SESSION_COOKIE_ATTRIBUTES}; Max-Age=${SESSION_TTL_SECONDS}`;
 }
 
 function clearSessionCookie() {
-  return 'session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
+  return `session=; ${SESSION_COOKIE_ATTRIBUTES}; Max-Age=0`;
 }
 
 function asTournament(row) {
