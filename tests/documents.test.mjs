@@ -57,7 +57,11 @@ test('document exports bundle and load TH Sarabun PSK faces', async () => {
   assert.match(app, /async function exportPairingSheet/);
   assert.match(app, /const maxRowsPerPage = 10/);
   assert.match(app, /const rowsPerPage = Math\.ceil/);
+  assert.match(app, /cellWidth - 36, \{ size: 34, color: '#2f1e29' \}/);
+  assert.match(app, /cellWidth - 36, \{ size: 24, weight: 400, color: '#735f6d' \}/);
   assert.match(app, /สร้างใบมาสเตอร์เปล่า \(PDF\)/);
   assert.match(app, /data-mode="empty"/);
   assert.match(app, /mode === 'empty' \? \[null\] : teams/);
+  assert.match(app, /team\.member_1, 275, 263, 275/);
+  assert.match(app, /team\.member_2, 905, 263, 312/);
 });

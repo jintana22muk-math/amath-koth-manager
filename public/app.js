@@ -491,19 +491,19 @@ function drawMasterCard(context, template, team, mode) {
   drawFittedText(context, team.code, 1293, 105, 120, { align: 'center', size: 25 });
   drawFittedText(context, mode === 'complete' ? ranking : team.seed, 1435, 105, 110, { align: 'center', size: 25 });
 
-  drawFittedText(context, team.member_1, 275, 278, 275, { size: 20 });
-  drawFittedText(context, team.member_1_level || team.member_1_room, 660, 278, 78, { size: 18 });
-  drawFittedText(context, team.school, 240, 323, 310, { size: 19 });
-  drawFittedText(context, team.province, 650, 323, 88, { size: 18 });
-  drawFittedText(context, team.member_1_student_id, 330, 372, 175, { size: 18 });
-  drawFittedText(context, team.member_1_phone, 630, 372, 107, { size: 18 });
+  drawFittedText(context, team.member_1, 275, 263, 275, { size: 20 });
+  drawFittedText(context, team.member_1_level || team.member_1_room, 660, 263, 78, { size: 18 });
+  drawFittedText(context, team.school, 240, 310, 310, { size: 19 });
+  drawFittedText(context, team.province, 650, 310, 88, { size: 18 });
+  drawFittedText(context, team.member_1_student_id, 330, 357, 175, { size: 18 });
+  drawFittedText(context, team.member_1_phone, 630, 357, 107, { size: 18 });
 
-  drawFittedText(context, team.member_2, 905, 278, 312, { size: 20 });
-  drawFittedText(context, team.member_2_level || team.member_2_room, 1330, 278, 64, { size: 17 });
-  drawFittedText(context, team.school, 880, 323, 338, { size: 19 });
-  drawFittedText(context, team.province, 1320, 323, 76, { size: 17 });
-  drawFittedText(context, team.member_2_student_id, 975, 372, 195, { size: 18 });
-  drawFittedText(context, team.member_2_phone, 1305, 372, 89, { size: 17 });
+  drawFittedText(context, team.member_2, 905, 263, 312, { size: 20 });
+  drawFittedText(context, team.member_2_level || team.member_2_room, 1330, 263, 64, { size: 17 });
+  drawFittedText(context, team.school, 880, 310, 338, { size: 19 });
+  drawFittedText(context, team.province, 1320, 310, 76, { size: 17 });
+  drawFittedText(context, team.member_2_student_id, 975, 357, 195, { size: 18 });
+  drawFittedText(context, team.member_2_phone, 1305, 357, 89, { size: 17 });
 
   if (mode !== 'complete') return;
   const columns = [66, 153, 223, 321, 453, 574, 688, 804, 951, 1147, 1328, 1455];
@@ -573,15 +573,15 @@ function drawPairingSheetPage(context, round, matches, pageIndex, pageCount) {
   context.fillStyle = '#7a3f65';
   context.fillRect(margin, 58, 14, 180);
 
-  drawFittedText(context, 'ใบจับคู่แข่งขัน A-Math', margin + 42, 98, 720, { size: 42, color: '#3a2133' });
-  drawFittedText(context, tournament.name, margin + 42, 150, 1080, { size: 34, color: '#7a3f65' });
-  drawFittedText(context, [tournament.category, tournament.academic_year ? `ปีการศึกษา ${tournament.academic_year}` : ''].filter(Boolean).join(' - '), margin + 42, 197, 1040, { size: 25, weight: 400, color: '#5f4b59' });
-  drawFittedText(context, round.title, width - margin - 35, 113, 450, { align: 'right', size: 36, color: '#3a2133' });
+  drawFittedText(context, 'ใบจับคู่แข่งขัน A-Math', margin + 42, 98, 720, { size: 48, color: '#3a2133' });
+  drawFittedText(context, tournament.name, margin + 42, 150, 1080, { size: 38, color: '#7a3f65' });
+  drawFittedText(context, [tournament.category, tournament.academic_year ? `ปีการศึกษา ${tournament.academic_year}` : ''].filter(Boolean).join(' - '), margin + 42, 197, 1040, { size: 29, weight: 400, color: '#5f4b59' });
+  drawFittedText(context, round.title, width - margin - 35, 113, 450, { align: 'right', size: 42, color: '#3a2133' });
   const roundDetail = round.phase === 'koth'
     ? `เกม KOTH ${round.round_number} - เพดานผลต่าง +/-${round.diff_cap}`
     : round.phase === 'finals-semifinal' ? 'รอบรองชนะเลิศ 4 อันดับแรก' : 'รอบชิงชนะเลิศและชิงอันดับ 3';
-  drawFittedText(context, roundDetail, width - margin - 35, 168, 500, { align: 'right', size: 24, weight: 400, color: '#5f4b59' });
-  drawFittedText(context, `หน้า ${pageIndex + 1}/${pageCount}`, width - margin - 35, 207, 220, { align: 'right', size: 22, weight: 400, color: '#7a3f65' });
+  drawFittedText(context, roundDetail, width - margin - 35, 168, 500, { align: 'right', size: 28, weight: 400, color: '#5f4b59' });
+  drawFittedText(context, `หน้า ${pageIndex + 1}/${pageCount}`, width - margin - 35, 207, 220, { align: 'right', size: 25, weight: 400, color: '#7a3f65' });
 
   context.fillStyle = '#7a3f65';
   context.fillRect(margin, tableTop, width - margin * 2, headerHeight);
@@ -596,16 +596,16 @@ function drawPairingSheetPage(context, round, matches, pageIndex, pageCount) {
       context.lineTo(x, tableTop + headerHeight);
       context.stroke();
     }
-    drawFittedText(context, label, x + cellWidth / 2, tableTop + headerHeight / 2, cellWidth - 20, { align: 'center', size: 25, color: '#ffffff' });
+    drawFittedText(context, label, x + cellWidth / 2, tableTop + headerHeight / 2, cellWidth - 20, { align: 'center', size: 30, color: '#ffffff' });
   });
 
   const drawTeam = (team, x, y, cellWidth, bye = false) => {
     if (bye) {
-      drawFittedText(context, 'พักการแข่งขัน (BYE)', x + cellWidth / 2, y + rowHeight / 2, cellWidth - 30, { align: 'center', size: 27, color: '#7a3f65' });
+      drawFittedText(context, 'พักการแข่งขัน (BYE)', x + cellWidth / 2, y + rowHeight / 2, cellWidth - 30, { align: 'center', size: 32, color: '#7a3f65' });
       return;
     }
-    drawFittedText(context, `${team?.code || ''}  ${team?.name || '-'}`, x + 18, y + rowHeight / 2 - 14, cellWidth - 36, { size: 25, color: '#2f1e29' });
-    drawFittedText(context, team?.school || '', x + 18, y + rowHeight / 2 + 19, cellWidth - 36, { size: 19, weight: 400, color: '#735f6d' });
+    drawFittedText(context, `${team?.code || ''}  ${team?.name || '-'}`, x + 18, y + rowHeight / 2 - 18, cellWidth - 36, { size: 34, color: '#2f1e29' });
+    drawFittedText(context, team?.school || '', x + 18, y + rowHeight / 2 + 23, cellWidth - 36, { size: 24, weight: 400, color: '#735f6d' });
   };
 
   matches.forEach((match, index) => {
@@ -622,32 +622,32 @@ function drawPairingSheetPage(context, round, matches, pageIndex, pageCount) {
       context.stroke();
     }
 
-    drawFittedText(context, match.table_no, (columns[0] + columns[1]) / 2, y + rowHeight / 2, columns[1] - columns[0] - 20, { align: 'center', size: 29, color: '#7a3f65' });
+    drawFittedText(context, match.table_no, (columns[0] + columns[1]) / 2, y + rowHeight / 2, columns[1] - columns[0] - 20, { align: 'center', size: 34, color: '#7a3f65' });
     drawTeam(match.team_a, columns[1], y, columns[2] - columns[1]);
     drawTeam(match.team_b, columns[3], y, columns[4] - columns[3], match.is_bye);
 
     const scoreCenter = (columns[2] + columns[3]) / 2;
     if (match.is_bye) {
-      drawFittedText(context, '-', scoreCenter, y + rowHeight / 2, 100, { align: 'center', size: 28, color: '#735f6d' });
+      drawFittedText(context, '-', scoreCenter, y + rowHeight / 2, 100, { align: 'center', size: 34, color: '#735f6d' });
     } else if (match.status === 'final' && match.score_a !== null && match.score_b !== null) {
-      drawFittedText(context, `${match.score_a} : ${match.score_b}`, scoreCenter, y + rowHeight / 2, columns[3] - columns[2] - 24, { align: 'center', size: 30, color: '#2f1e29' });
+      drawFittedText(context, `${match.score_a} : ${match.score_b}`, scoreCenter, y + rowHeight / 2, columns[3] - columns[2] - 24, { align: 'center', size: 36, color: '#2f1e29' });
     } else {
       context.strokeStyle = '#b884a1';
       context.lineWidth = 2;
-      context.strokeRect(scoreCenter - 72, y + (rowHeight - 40) / 2, 54, 40);
-      context.strokeRect(scoreCenter + 18, y + (rowHeight - 40) / 2, 54, 40);
-      drawFittedText(context, ':', scoreCenter, y + rowHeight / 2, 20, { align: 'center', size: 28, color: '#7a3f65' });
+      context.strokeRect(scoreCenter - 82, y + (rowHeight - 48) / 2, 64, 48);
+      context.strokeRect(scoreCenter + 18, y + (rowHeight - 48) / 2, 64, 48);
+      drawFittedText(context, ':', scoreCenter, y + rowHeight / 2, 20, { align: 'center', size: 32, color: '#7a3f65' });
     }
 
     let starter = match.is_bye ? '-' : '□ ทีม A    □ ทีม B';
     if (match.starter_team_id === match.team_a_id) starter = `ทีม A - ${match.team_a?.code || match.team_a?.name || ''}`;
     if (match.starter_team_id === match.team_b_id) starter = `ทีม B - ${match.team_b?.code || match.team_b?.name || ''}`;
-    drawFittedText(context, starter, (columns[4] + columns[5]) / 2, y + rowHeight / 2, columns[5] - columns[4] - 24, { align: 'center', size: 21, weight: 400, color: '#5f4b59' });
+    drawFittedText(context, starter, (columns[4] + columns[5]) / 2, y + rowHeight / 2, columns[5] - columns[4] - 24, { align: 'center', size: 27, weight: 400, color: '#5f4b59' });
   });
 
   const tableBottom = tableTop + headerHeight + matches.length * rowHeight;
-  drawFittedText(context, 'หมายเหตุ: ตรวจสอบเลขโต๊ะและคู่แข่งขันก่อนเริ่มเกม', margin, Math.min(tableBottom + 42, height - 78), 920, { size: 21, weight: 400, color: '#735f6d' });
-  drawFittedText(context, 'A-Math KOTH Manager', width - margin, height - 48, 360, { align: 'right', size: 19, weight: 400, color: '#9a7d8e' });
+  drawFittedText(context, 'หมายเหตุ: ตรวจสอบเลขโต๊ะและคู่แข่งขันก่อนเริ่มเกม', margin, Math.min(tableBottom + 42, height - 78), 920, { size: 24, weight: 400, color: '#735f6d' });
+  drawFittedText(context, 'A-Math KOTH Manager', width - margin, height - 48, 360, { align: 'right', size: 22, weight: 400, color: '#9a7d8e' });
 }
 
 async function exportPairingSheet(roundId) {
