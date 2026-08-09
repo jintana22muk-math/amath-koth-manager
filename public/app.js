@@ -265,7 +265,7 @@ function renderMatchRow(match, round) {
 function renderRounds(data) {
   const allRounds = data.rounds;
   if (!allRounds.length) return `<section class="card empty"><div class="empty-icon">↔</div><h3>ยังไม่มีการจับคู่</h3><p>เมื่อพร้อมแล้วให้สร้างเกมคิงออฟเดอะฮิลล์ (KOTH) แรก ระบบจะเรียงตามลำดับเริ่มต้น (Seed) หรือสุ่มตามที่เลือก</p></section>`;
-  return allRounds.slice().reverse().map((round, index) => `<section class="card round-card ${index === 0 ? 'latest-round' : ''}"><header class="round-title"><div><span class="section-kicker">${index === 0 ? 'ล่าสุด' : 'รอบก่อนหน้า'}</span><h4>${escapeHtml(round.title)}</h4><p>${round.phase === 'koth' ? `เกมคิงออฟเดอะฮิลล์ (KOTH) ${round.round_number} · เพดานผลต่าง ±${round.diff_cap}` : round.phase === 'finals-semifinal' ? '4 อันดับแรก (Top 4) · อันดับ 1 พบ 4 และอันดับ 2 พบ 3' : 'รอบชิงชนะเลิศและชิงอันดับ 3'}</p>${round.pairing_note ? `<p class="notice warning" style="margin:8px 0 0">${escapeHtml(round.pairing_note)}</p>` : ''}</div><div class="button-row">${badge(round.status)}${round.status !== 'completed' ? `<button class="button ghost small" data-action="edit-pairings" data-id="${escapeHtml(round.id)}">แก้ไขคู่</button>` : ''}</div></header><div class="match-list">${round.matches.map((match) => renderMatchRow(match, round)).join('')}</div></section>`).join('');
+  return allRounds.slice().reverse().map((round, index) => `<section class="card round-card ${index === 0 ? 'latest-round' : ''}"><header class="round-title"><div><span class="section-kicker">${index === 0 ? 'ล่าสุด' : 'รอบก่อนหน้า'}</span><h4>${escapeHtml(round.title)}</h4><p>${round.phase === 'koth' ? `เกมคิงออฟเดอะฮิลล์ (KOTH) ${round.round_number} · เพดานผลต่าง ±${round.diff_cap}` : round.phase === 'finals-semifinal' ? '4 อันดับแรก (Top 4) · อันดับ 1 พบ 4 และอันดับ 2 พบ 3' : 'รอบชิงชนะเลิศและชิงอันดับ 3'}</p>${round.pairing_note ? `<p class="notice warning" style="margin:8px 0 0">${escapeHtml(round.pairing_note)}</p>` : ''}</div><div class="button-row"><button class="button secondary small" data-action="export-pairing-sheet" data-id="${escapeHtml(round.id)}">พิมพ์ใบจับคู่เกมนี้</button>${badge(round.status)}${round.status !== 'completed' ? `<button class="button ghost small" data-action="edit-pairings" data-id="${escapeHtml(round.id)}">แก้ไขคู่</button>` : ''}</div></header><div class="match-list">${round.matches.map((match) => renderMatchRow(match, round)).join('')}</div></section>`).join('');
 }
 
 function finalControls(data) {
@@ -300,6 +300,13 @@ function renderReports() {
   const t = data.tournament;
   const publicUrl = `${location.origin}${location.pathname}?public=${encodeURIComponent(t.code)}`;
   return `${importSection}<section class="section-head"><div><span class="section-kicker">มาสเตอร์สกอร์การ์ด (Master Score Card)</span><h3>ใบมาสเตอร์สกอร์การ์ด</h3><p>สร้างจากแม่แบบจริง หนึ่งหน้าต่อหนึ่งทีม รวมเป็นไฟล์พร้อมพิมพ์ (PDF) เดียว</p></div></section><section class="master-card-builder"><div class="master-preview"><img src="/assets/master-score-card.png" alt="ตัวอย่างใบมาสเตอร์สกอร์การ์ด" /></div><div class="master-options"><span class="document-status">${data.teams.filter((team) => team.is_active).length} ทีม · ${data.rounds.filter((round) => round.phase === 'koth').length} เกม</span><h3>เลือกฉบับที่ต้องการ</h3><div class="master-option"><div><strong>ฉบับเตรียมแข่งขัน</strong><p>กรอกข้อมูลทีมและนักกีฬา ส่วนผลการแข่งขันเว้นว่างไว้เขียนมือ</p></div><button class="button primary" data-action="export-master-card" data-mode="blank">สร้างไฟล์พร้อมพิมพ์ (PDF)</button></div><div class="master-option"><div><strong>ฉบับผลการแข่งขัน</strong><p>เติมโต๊ะ คู่แข่งขัน ผลชนะ/เสมอ/แพ้ และผลสะสมจากระบบ</p></div><button class="button secondary" data-action="export-master-card" data-mode="complete">สร้างไฟล์พร้อมผล (PDF)</button></div><p class="privacy-note">เอกสารนี้มีข้อมูลนักเรียน โปรดจัดเก็บและส่งต่อเฉพาะผู้เกี่ยวข้อง</p></div></section><section class="section-head"><div><span class="section-kicker">เอกสารอื่น</span><h3>เผยแพร่ ส่งออก และสำรองข้อมูล</h3><p>ข้อมูลทุกเอกสารมาจากทัวร์นาเมนต์เดียวกัน</p></div></section><div class="action-card-grid"><button class="action-card card" data-action="export-csv"><span class="action-mark">ไฟล์ตาราง (CSV)</span><strong>ตารางคะแนน</strong><small>เปิดต่อใน Excel (โปรแกรมตาราง) หรือ Google Sheets (ตารางออนไลน์)</small></button><button class="action-card card" data-action="print"><span class="action-mark">พิมพ์เอกสาร</span><strong>พิมพ์หน้าปัจจุบัน</strong><small>พิมพ์หรือบันทึกเป็นไฟล์พร้อมพิมพ์ (PDF)</small></button><button class="action-card card" data-action="export-backup"><span class="action-mark">ไฟล์สำรอง (JSON)</span><strong>สำรองทัวร์นาเมนต์</strong><small>เก็บทีม คู่แข่ง ผล และการตั้งค่า</small></button><label class="action-card card upload-card"><span class="action-mark">กู้คืนข้อมูล</span><strong>กู้คืนเป็นรายการใหม่</strong><small>ข้อมูลเดิมจะไม่ถูกเขียนทับ</small><input id="backup-file" type="file" accept="application/json,.json" /></label></div><section class="publish-card ${t.public_enabled ? 'is-live' : ''}" style="margin-top:28px"><div><span class="section-kicker">หน้าคะแนนสำหรับผู้ชม</span><h3>${t.public_enabled ? 'ตารางคะแนนเปิดให้ผู้ชมแล้ว' : 'พร้อมประกาศผลให้ผู้ชม'}</h3><p>${t.public_enabled ? 'ผู้ชมดูอันดับและผลล่าสุดได้ แต่ไม่สามารถแก้ไขข้อมูล' : 'เปิดการเผยแพร่จากหน้าตั้งค่าเมื่อข้อมูลพร้อม'}</p></div><div class="publish-actions"><button class="button primary" data-action="open-public" ${t.public_enabled ? '' : 'disabled'}>เปิดหน้าผู้ชม</button><button class="button secondary" data-action="copy-public" ${t.public_enabled ? '' : 'disabled'}>คัดลอกลิงก์</button></div></section><label class="share-link field full"><span>ลิงก์สำหรับผู้ชม</span><input readonly value="${escapeHtml(publicUrl)}" /></label>`;
+}
+
+function renderReportEnhancements() {
+  if (state.view !== 'reports') return;
+  const privacyNote = app.querySelector('.master-options .privacy-note');
+  if (!privacyNote) return;
+  privacyNote.insertAdjacentHTML('beforebegin', `<div class="master-option"><div><strong>ใบเปล่าสำหรับเขียนมือ</strong><p>แม่แบบเปล่า 1 หน้า ไม่มีชื่อทีมหรือผู้แข่งขัน สำหรับพิมพ์สำเนาให้ผู้เข้าแข่งขันกรอกเอง</p></div><button class="button ghost" data-action="export-master-card" data-mode="empty">สร้างใบมาสเตอร์เปล่า (PDF)</button></div>`);
 }
 
 function cleanImportedTitle(value, category) {
@@ -361,6 +368,7 @@ function render() {
   if (!state.authenticated) { renderLogin(); return; }
   const tournament = state.data?.tournament;
   app.innerHTML = `<div class="app-shell">${renderMobileHeader(tournament)}<aside class="sidebar"><div class="brand"><div class="brand-mark">A<span>MATH</span></div><div><h1>ศูนย์จัดการแข่งขัน</h1><small>คิงออฟเดอะฮิลล์ (KOTH)</small></div></div><div class="nav-caption">ลำดับการทำงาน</div><nav class="nav-list">${navItems.map(([id, label, number]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}><span>${number}</span>${label}</button>`).join('')}</nav><div class="nav-caption utility-caption">จัดการระบบ</div><nav class="nav-list utility-nav">${utilityNavItems.map(([id, label]) => `<button class="nav-link ${state.view === id ? 'active' : ''}" data-action="nav" data-view="${id}" ${state.view === id ? 'aria-current="page"' : ''}>${label}</button>`).join('')}</nav><div class="sidebar-footer">${tournament ? `<span class="sidebar-status"><i class="${escapeHtml(tournament.status)}"></i>${tournament.status === 'draft' ? 'กำลังเตรียมรายการ' : tournament.status === 'open' ? 'กำลังแข่งขัน' : 'รายการเสร็จสิ้น'}</span>` : ''}<div class="sidebar-user"><strong>${escapeHtml(state.user?.display_name || 'ผู้ดูแล')}</strong><span>@${escapeHtml(state.user?.username || 'admin')}</span></div><button data-action="logout">ออกจากระบบ</button></div></aside><main class="main">${pageHeading()}${renderView()}</main>${renderMobileNavigation()}</div>${renderModal()}${renderToasts()}`;
+  renderReportEnhancements();
 }
 
 function editTeamModal(team) {
@@ -478,23 +486,24 @@ function teamMatchHistory(team) {
 function drawMasterCard(context, template, team, mode) {
   context.clearRect(0, 0, 1536, 1024);
   context.drawImage(template, 0, 0, 1536, 1024);
+  if (mode === 'empty' || !team) return;
   const ranking = state.data.standings.find((row) => row.id === team.id)?.rank;
   drawFittedText(context, team.code, 1293, 105, 120, { align: 'center', size: 25 });
   drawFittedText(context, mode === 'complete' ? ranking : team.seed, 1435, 105, 110, { align: 'center', size: 25 });
 
-  drawFittedText(context, team.member_1, 265, 263, 285, { size: 22 });
-  drawFittedText(context, team.member_1_level || team.member_1_room, 615, 263, 118, { size: 20 });
-  drawFittedText(context, team.school, 235, 310, 320, { size: 20 });
-  drawFittedText(context, team.province, 610, 310, 120, { size: 20 });
-  drawFittedText(context, team.member_1_student_id, 305, 357, 200, { size: 19 });
-  drawFittedText(context, team.member_1_phone, 600, 357, 135, { size: 19 });
+  drawFittedText(context, team.member_1, 275, 278, 275, { size: 20 });
+  drawFittedText(context, team.member_1_level || team.member_1_room, 660, 278, 78, { size: 18 });
+  drawFittedText(context, team.school, 240, 323, 310, { size: 19 });
+  drawFittedText(context, team.province, 650, 323, 88, { size: 18 });
+  drawFittedText(context, team.member_1_student_id, 330, 372, 175, { size: 18 });
+  drawFittedText(context, team.member_1_phone, 630, 372, 107, { size: 18 });
 
-  drawFittedText(context, team.member_2, 882, 263, 330, { size: 22 });
-  drawFittedText(context, team.member_2_level || team.member_2_room, 1260, 263, 120, { size: 20 });
-  drawFittedText(context, team.school, 850, 310, 370, { size: 20 });
-  drawFittedText(context, team.province, 1255, 310, 135, { size: 20 });
-  drawFittedText(context, team.member_2_student_id, 930, 357, 235, { size: 19 });
-  drawFittedText(context, team.member_2_phone, 1250, 357, 140, { size: 19 });
+  drawFittedText(context, team.member_2, 905, 278, 312, { size: 20 });
+  drawFittedText(context, team.member_2_level || team.member_2_room, 1330, 278, 64, { size: 17 });
+  drawFittedText(context, team.school, 880, 323, 338, { size: 19 });
+  drawFittedText(context, team.province, 1320, 323, 76, { size: 17 });
+  drawFittedText(context, team.member_2_student_id, 975, 372, 195, { size: 18 });
+  drawFittedText(context, team.member_2_phone, 1305, 372, 89, { size: 17 });
 
   if (mode !== 'complete') return;
   const columns = [66, 153, 223, 321, 453, 574, 688, 804, 951, 1147, 1328, 1455];
@@ -509,9 +518,10 @@ function drawMasterCard(context, template, team, mode) {
 async function exportMasterCards(mode) {
   if (!state.data) return;
   const teams = state.data.teams.filter((team) => team.is_active);
-  if (!teams.length) { notify('ยังไม่มีทีมสำหรับสร้าง Master Score Card', 'error'); return; }
+  if (mode !== 'empty' && !teams.length) { notify('ยังไม่มีทีมสำหรับสร้าง Master Score Card', 'error'); return; }
   if (!window.PDFLib?.PDFDocument) { notify('เครื่องมือสร้าง PDF ยังโหลดไม่สำเร็จ กรุณารีเฟรชหน้า', 'error'); return; }
-  notify(`กำลังสร้าง Master Score Card ${teams.length} หน้า…`);
+  const pages = mode === 'empty' ? [null] : teams;
+  notify(mode === 'empty' ? 'กำลังสร้างใบมาสเตอร์เปล่าสำหรับเขียนมือ…' : `กำลังสร้าง Master Score Card ${pages.length} หน้า…`);
   try {
     await loadDocumentFonts();
     const template = await loadImage('/assets/master-score-card.png');
@@ -520,7 +530,7 @@ async function exportMasterCards(mode) {
     canvas.height = 1024;
     const context = canvas.getContext('2d');
     const pdf = await window.PDFLib.PDFDocument.create();
-    for (const team of teams) {
+    for (const team of pages) {
       drawMasterCard(context, template, team, mode);
       const blob = await canvasBlob(canvas);
       const image = await pdf.embedJpg(await blob.arrayBuffer());
@@ -534,10 +544,144 @@ async function exportMasterCards(mode) {
     pdf.setSubject('A-Math Master Score Card');
     pdf.setCreator('ระบบจัดการแข่งขัน A-Math');
     const bytes = await pdf.save();
-    download(`Master_Score_Card_${slug(state.data.tournament.name)}_${mode === 'complete' ? 'results' : 'blank'}.pdf`, bytes, 'application/pdf');
-    notify(`สร้าง Master Score Card ${teams.length} หน้าเรียบร้อย`, 'success');
+    const suffix = mode === 'complete' ? 'results' : mode === 'empty' ? 'empty' : 'prepared';
+    download(`Master_Score_Card_${slug(state.data.tournament.name)}_${suffix}.pdf`, bytes, 'application/pdf');
+    notify(mode === 'empty' ? 'สร้างใบมาสเตอร์เปล่า 1 หน้าเรียบร้อย' : `สร้าง Master Score Card ${pages.length} หน้าเรียบร้อย`, 'success');
   } catch (error) {
     notify(`สร้าง PDF ไม่สำเร็จ: ${error.message}`, 'error');
+  }
+}
+
+function drawPairingSheetPage(context, round, matches, pageIndex, pageCount) {
+  const tournament = state.data.tournament;
+  const width = context.canvas.width;
+  const height = context.canvas.height;
+  const margin = 70;
+  const tableTop = 300;
+  const headerHeight = 62;
+  const rowHeight = Math.min(112, Math.floor(780 / Math.max(matches.length, 1)));
+  const columns = [margin, 175, 650, 855, 1330, width - margin];
+  const labels = ['โต๊ะ', 'ทีม A', 'คะแนน', 'ทีม B', 'ผู้เริ่มก่อน'];
+
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = '#d84f91';
+  context.fillRect(0, 0, width, 22);
+  context.fillStyle = '#fff3f8';
+  context.fillRect(margin, 58, width - margin * 2, 180);
+  context.fillStyle = '#7a3f65';
+  context.fillRect(margin, 58, 14, 180);
+
+  drawFittedText(context, 'ใบจับคู่แข่งขัน A-Math', margin + 42, 98, 720, { size: 42, color: '#3a2133' });
+  drawFittedText(context, tournament.name, margin + 42, 150, 1080, { size: 34, color: '#7a3f65' });
+  drawFittedText(context, [tournament.category, tournament.academic_year ? `ปีการศึกษา ${tournament.academic_year}` : ''].filter(Boolean).join(' - '), margin + 42, 197, 1040, { size: 25, weight: 400, color: '#5f4b59' });
+  drawFittedText(context, round.title, width - margin - 35, 113, 450, { align: 'right', size: 36, color: '#3a2133' });
+  const roundDetail = round.phase === 'koth'
+    ? `เกม KOTH ${round.round_number} - เพดานผลต่าง +/-${round.diff_cap}`
+    : round.phase === 'finals-semifinal' ? 'รอบรองชนะเลิศ 4 อันดับแรก' : 'รอบชิงชนะเลิศและชิงอันดับ 3';
+  drawFittedText(context, roundDetail, width - margin - 35, 168, 500, { align: 'right', size: 24, weight: 400, color: '#5f4b59' });
+  drawFittedText(context, `หน้า ${pageIndex + 1}/${pageCount}`, width - margin - 35, 207, 220, { align: 'right', size: 22, weight: 400, color: '#7a3f65' });
+
+  context.fillStyle = '#7a3f65';
+  context.fillRect(margin, tableTop, width - margin * 2, headerHeight);
+  context.strokeStyle = '#b884a1';
+  context.lineWidth = 2;
+  labels.forEach((label, index) => {
+    const x = columns[index];
+    const cellWidth = columns[index + 1] - x;
+    if (index) {
+      context.beginPath();
+      context.moveTo(x, tableTop);
+      context.lineTo(x, tableTop + headerHeight);
+      context.stroke();
+    }
+    drawFittedText(context, label, x + cellWidth / 2, tableTop + headerHeight / 2, cellWidth - 20, { align: 'center', size: 25, color: '#ffffff' });
+  });
+
+  const drawTeam = (team, x, y, cellWidth, bye = false) => {
+    if (bye) {
+      drawFittedText(context, 'พักการแข่งขัน (BYE)', x + cellWidth / 2, y + rowHeight / 2, cellWidth - 30, { align: 'center', size: 27, color: '#7a3f65' });
+      return;
+    }
+    drawFittedText(context, `${team?.code || ''}  ${team?.name || '-'}`, x + 18, y + rowHeight / 2 - 14, cellWidth - 36, { size: 25, color: '#2f1e29' });
+    drawFittedText(context, team?.school || '', x + 18, y + rowHeight / 2 + 19, cellWidth - 36, { size: 19, weight: 400, color: '#735f6d' });
+  };
+
+  matches.forEach((match, index) => {
+    const y = tableTop + headerHeight + index * rowHeight;
+    context.fillStyle = index % 2 ? '#fff8fb' : '#ffffff';
+    context.fillRect(margin, y, width - margin * 2, rowHeight);
+    context.strokeStyle = '#e6bdcf';
+    context.lineWidth = 2;
+    context.strokeRect(margin, y, width - margin * 2, rowHeight);
+    for (let columnIndex = 1; columnIndex < columns.length - 1; columnIndex += 1) {
+      context.beginPath();
+      context.moveTo(columns[columnIndex], y);
+      context.lineTo(columns[columnIndex], y + rowHeight);
+      context.stroke();
+    }
+
+    drawFittedText(context, match.table_no, (columns[0] + columns[1]) / 2, y + rowHeight / 2, columns[1] - columns[0] - 20, { align: 'center', size: 29, color: '#7a3f65' });
+    drawTeam(match.team_a, columns[1], y, columns[2] - columns[1]);
+    drawTeam(match.team_b, columns[3], y, columns[4] - columns[3], match.is_bye);
+
+    const scoreCenter = (columns[2] + columns[3]) / 2;
+    if (match.is_bye) {
+      drawFittedText(context, '-', scoreCenter, y + rowHeight / 2, 100, { align: 'center', size: 28, color: '#735f6d' });
+    } else if (match.status === 'final' && match.score_a !== null && match.score_b !== null) {
+      drawFittedText(context, `${match.score_a} : ${match.score_b}`, scoreCenter, y + rowHeight / 2, columns[3] - columns[2] - 24, { align: 'center', size: 30, color: '#2f1e29' });
+    } else {
+      context.strokeStyle = '#b884a1';
+      context.lineWidth = 2;
+      context.strokeRect(scoreCenter - 72, y + (rowHeight - 40) / 2, 54, 40);
+      context.strokeRect(scoreCenter + 18, y + (rowHeight - 40) / 2, 54, 40);
+      drawFittedText(context, ':', scoreCenter, y + rowHeight / 2, 20, { align: 'center', size: 28, color: '#7a3f65' });
+    }
+
+    let starter = match.is_bye ? '-' : '□ ทีม A    □ ทีม B';
+    if (match.starter_team_id === match.team_a_id) starter = `ทีม A - ${match.team_a?.code || match.team_a?.name || ''}`;
+    if (match.starter_team_id === match.team_b_id) starter = `ทีม B - ${match.team_b?.code || match.team_b?.name || ''}`;
+    drawFittedText(context, starter, (columns[4] + columns[5]) / 2, y + rowHeight / 2, columns[5] - columns[4] - 24, { align: 'center', size: 21, weight: 400, color: '#5f4b59' });
+  });
+
+  const tableBottom = tableTop + headerHeight + matches.length * rowHeight;
+  drawFittedText(context, 'หมายเหตุ: ตรวจสอบเลขโต๊ะและคู่แข่งขันก่อนเริ่มเกม', margin, Math.min(tableBottom + 42, height - 78), 920, { size: 21, weight: 400, color: '#735f6d' });
+  drawFittedText(context, 'A-Math KOTH Manager', width - margin, height - 48, 360, { align: 'right', size: 19, weight: 400, color: '#9a7d8e' });
+}
+
+async function exportPairingSheet(roundId) {
+  if (!state.data) return;
+  const round = state.data.rounds.find((item) => item.id === roundId);
+  if (!round?.matches?.length) { notify('ยังไม่มีคู่แข่งขันสำหรับสร้างเอกสาร', 'error'); return; }
+  if (!window.PDFLib?.PDFDocument) { notify('เครื่องมือสร้าง PDF ยังโหลดไม่สำเร็จ กรุณารีเฟรชหน้า', 'error'); return; }
+  notify(`กำลังสร้างใบจับคู่ ${round.title}…`);
+  try {
+    await loadDocumentFonts();
+    const canvas = document.createElement('canvas');
+    canvas.width = 1754;
+    canvas.height = 1240;
+    const context = canvas.getContext('2d');
+    const pdf = await window.PDFLib.PDFDocument.create();
+    const maxRowsPerPage = 10;
+    const pageCount = Math.ceil(round.matches.length / maxRowsPerPage);
+    const rowsPerPage = Math.ceil(round.matches.length / pageCount);
+    const pages = Array.from({ length: pageCount }, (_, index) => round.matches.slice(index * rowsPerPage, (index + 1) * rowsPerPage));
+    for (const [pageIndex, matches] of pages.entries()) {
+      drawPairingSheetPage(context, round, matches, pageIndex, pages.length);
+      const blob = await canvasBlob(canvas);
+      const image = await pdf.embedJpg(await blob.arrayBuffer());
+      const page = pdf.addPage([841.89, 595.28]);
+      page.drawImage(image, { x: 0, y: 0, width: 841.89, height: 595.28 });
+    }
+    pdf.setTitle(`ใบจับคู่แข่งขัน - ${state.data.tournament.name} - ${round.title}`);
+    pdf.setSubject('A-Math tournament pairing sheet');
+    pdf.setCreator('ระบบจัดการแข่งขัน A-Math');
+    const bytes = await pdf.save();
+    download(`Pairings_${slug(state.data.tournament.name)}_${slug(round.title)}.pdf`, bytes, 'application/pdf');
+    notify(`สร้างใบจับคู่ ${round.title} เรียบร้อย`, 'success');
+  } catch (error) {
+    notify(`สร้างใบจับคู่ PDF ไม่สำเร็จ: ${error.message}`, 'error');
   }
 }
 
@@ -587,6 +731,7 @@ async function handleAction(event) {
   }
   if (action === 'import-docx') { openDocxImport(); return; }
   if (action === 'export-master-card') { await exportMasterCards(button.dataset.mode || 'blank'); return; }
+  if (action === 'export-pairing-sheet') { await exportPairingSheet(button.dataset.id); return; }
   if (action === 'select-tournament') { setSelected(button.dataset.id); state.view = 'dashboard'; await loadTournament(); render(); return; }
   if (action === 'edit-team') { const team = state.data?.teams.find((item) => item.id === button.dataset.id); if (team) editTeamModal(team); return; }
   if (action === 'restore-team') {

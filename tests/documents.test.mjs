@@ -53,4 +53,11 @@ test('document exports bundle and load TH Sarabun PSK faces', async () => {
   assert.match(styles, /font-family: "TH Sarabun PSK"/);
   assert.match(app, /loadDocumentFonts/);
   assert.match(app, /document\.fonts\.load\('700 24px "TH Sarabun PSK"'/);
+  assert.match(app, /data-action="export-pairing-sheet"/);
+  assert.match(app, /async function exportPairingSheet/);
+  assert.match(app, /const maxRowsPerPage = 10/);
+  assert.match(app, /const rowsPerPage = Math\.ceil/);
+  assert.match(app, /สร้างใบมาสเตอร์เปล่า \(PDF\)/);
+  assert.match(app, /data-mode="empty"/);
+  assert.match(app, /mode === 'empty' \? \[null\] : teams/);
 });
