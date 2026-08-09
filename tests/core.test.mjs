@@ -16,7 +16,11 @@ test('standings apply per-round capped differential and win/draw/loss points', (
   const standings = computeRankings({ teams, rounds, matches });
   assert.equal(standings[0].team_id, 'a');
   assert.equal(standings[0].capped_diff, 250);
-  assert.equal(standings.find((x) => x.team_id === 'c').points, 2);
+  const byeStanding = standings.find((x) => x.team_id === 'c');
+  assert.equal(byeStanding.points, 2);
+  assert.equal(byeStanding.points_for, 100);
+  assert.equal(byeStanding.raw_diff, 100);
+  assert.equal(byeStanding.capped_diff, 100);
 });
 
 test('pairing avoids a repeated pairing when another opponent exists', () => {

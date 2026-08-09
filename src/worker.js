@@ -9,6 +9,14 @@ import {
   slugify,
   toInt
 } from './core.js';
+import { parseDocxRegistration } from './documents.js';
+import {
+  hashPassword,
+  normalizeAdminUsername,
+  normalizePassword,
+  validateAdminUsername,
+  verifyPassword
+} from './auth.js';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -81,8 +89,33 @@ function constantTimeEqual(left, right) {
   return mismatch === 0;
 }
 
-async function makeSession(env) {
-  const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify({ role: 'admin', exp: Date.now() + SESSION_TTL_SECONDS * 1000 })));
+function environmentAdmin() {
+  return { id: 'env-admin', username: 'admin', display_name: 'ผู้ดูแลหลัก', role: 'admin', source: 'environment', is_system: true };
+}
+
+function asAdminUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username,
+    display_name: row.display_name,
+    role: 'admin',
+    source: 'database',
+    is_system: false,
+    created_at: row.created_at
+  };
+}
+
+async function makeSession(env, user) {
+  const claims = {
+    role: 'admin',
+    sub: user.id,
+    username: user.username,
+    display_name: user.display_name,
+    source: user.source,
+    exp: Date.now() + SESSION_TTL_SECONDS * 1000
+  };
+  const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify(claims)));
   const signature = await hmac(payload, env.AUTH_SECRET);
   return `${payload}.${signature}`;
 }
@@ -96,7 +129,12 @@ async function verifySession(request, env) {
   if (!constantTimeEqual(signature, expected)) return false;
   try {
     const data = JSON.parse(base64UrlToText(payload));
-    return data.role === 'admin' && Number(data.exp) > Date.now();
+    if (data.role !== 'admin' || Number(data.exp) <= Date.now()) return false;
+    if (data.source === 'database' && data.sub) {
+      const record = await env.DB.prepare('SELECT id, username, display_name, created_at FROM admin_users WHERE id = ? AND is_active = 1').bind(data.sub).first();
+      return asAdminUser(record) || false;
+    }
+    return env.ADMIN_PASSWORD ? environmentAdmin() : false;
   } catch {
     return false;
   }
@@ -108,11 +146,6 @@ function sessionCookie(token) {
 
 function clearSessionCookie() {
   return 'session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
-}
-
-async function requireAuth(request, env) {
-  if (!(await verifySession(request, env))) return error('กรุณาเข้าสู่ระบบผู้ดูแล', 401);
-  return null;
 }
 
 function asTournament(row) {
@@ -207,8 +240,17 @@ function validateTeamInput(input) {
     code: safeString(input.code, 24),
     name,
     school: safeString(input.school, 160),
+    province: safeString(input.province, 100),
     member_1: safeString(input.member_1, 120),
+    member_1_level: safeString(input.member_1_level, 60),
+    member_1_room: safeString(input.member_1_room, 60),
+    member_1_student_id: safeString(input.member_1_student_id, 40),
+    member_1_phone: safeString(input.member_1_phone, 40),
     member_2: safeString(input.member_2, 120),
+    member_2_level: safeString(input.member_2_level, 60),
+    member_2_room: safeString(input.member_2_room, 60),
+    member_2_student_id: safeString(input.member_2_student_id, 40),
+    member_2_phone: safeString(input.member_2_phone, 40),
     coach: safeString(input.coach, 120),
     contact: safeString(input.contact, 160),
     notes: safeString(input.notes, 500),
@@ -266,6 +308,44 @@ async function updateTournament(request, env, tournamentId) {
   return json({ ok: true, tournament: await getTournament(env, tournamentId) });
 }
 
+async function deleteTournament(request, env, tournamentId) {
+  const tournament = await getTournament(env, tournamentId);
+  if (!tournament) return error('ไม่พบรายการแข่งขัน', 404);
+
+  const input = await bodyJson(request);
+  const confirmedName = safeString(input.confirm_name, 160);
+  if (confirmedName !== tournament.name) {
+    return error('ชื่อทัวร์นาเมนต์ที่พิมพ์ไม่ตรงกัน จึงยังไม่ได้ลบข้อมูล', 400);
+  }
+
+  const counts = await env.DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM teams WHERE tournament_id = ?) AS team_count,
+    (SELECT COUNT(*) FROM rounds WHERE tournament_id = ?) AS round_count,
+    (SELECT COUNT(*) FROM matches WHERE round_id IN (SELECT id FROM rounds WHERE tournament_id = ?)) AS match_count`)
+    .bind(tournamentId, tournamentId, tournamentId).first();
+  const deletedAt = now();
+  const detail = {
+    tournament_id: tournamentId,
+    name: tournament.name,
+    team_count: toInt(counts?.team_count),
+    round_count: toInt(counts?.round_count),
+    match_count: toInt(counts?.match_count),
+    deleted_at: deletedAt
+  };
+
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM matches WHERE round_id IN (SELECT id FROM rounds WHERE tournament_id = ?)').bind(tournamentId),
+    env.DB.prepare('DELETE FROM audit_logs WHERE tournament_id = ?').bind(tournamentId),
+    env.DB.prepare('DELETE FROM rounds WHERE tournament_id = ?').bind(tournamentId),
+    env.DB.prepare('DELETE FROM teams WHERE tournament_id = ?').bind(tournamentId),
+    env.DB.prepare('DELETE FROM tournaments WHERE id = ?').bind(tournamentId),
+    env.DB.prepare('INSERT INTO audit_logs (id, tournament_id, action, detail_json, created_at) VALUES (?, NULL, ?, ?, ?)')
+      .bind(id(), 'tournament.delete', JSON.stringify(detail), deletedAt)
+  ]);
+
+  return json({ ok: true, deleted: detail });
+}
+
 async function listTournaments(env) {
   const query = await env.DB.prepare(`SELECT t.*, 
     (SELECT COUNT(*) FROM teams x WHERE x.tournament_id = t.id AND x.is_active = 1) AS team_count,
@@ -282,9 +362,18 @@ async function addTeam(request, env, tournamentId) {
   const code = input.code || `T${String(toInt(count?.total, 0) + 1).padStart(2, '0')}`;
   const teamId = id();
   try {
-    await env.DB.prepare(`INSERT INTO teams (id, tournament_id, seed, code, name, school, member_1, member_2, coach, contact, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(teamId, tournamentId, input.seed === 9999 ? toInt(maxSeed?.max_seed, 0) + 1 : input.seed, code, input.name, input.school, input.member_1, input.member_2, input.coach, input.contact, input.notes, now()).run();
+    await env.DB.prepare(`INSERT INTO teams (
+      id, tournament_id, seed, code, name, school, province,
+      member_1, member_1_level, member_1_room, member_1_student_id, member_1_phone,
+      member_2, member_2_level, member_2_room, member_2_student_id, member_2_phone,
+      coach, contact, notes, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(
+        teamId, tournamentId, input.seed === 9999 ? toInt(maxSeed?.max_seed, 0) + 1 : input.seed, code, input.name, input.school, input.province,
+        input.member_1, input.member_1_level, input.member_1_room, input.member_1_student_id, input.member_1_phone,
+        input.member_2, input.member_2_level, input.member_2_room, input.member_2_student_id, input.member_2_phone,
+        input.coach, input.contact, input.notes, now()
+      ).run();
   } catch (cause) {
     return error('รหัสทีมซ้ำ กรุณาใช้รหัสอื่น', 409, String(cause));
   }
@@ -302,8 +391,16 @@ async function updateTeam(request, env, tournamentId, teamId) {
   const code = input.code || existing.code;
   const isActive = patch.is_active === undefined ? Number(existing.is_active) : (patch.is_active ? 1 : 0);
   try {
-    await env.DB.prepare(`UPDATE teams SET seed=?, code=?, name=?, school=?, member_1=?, member_2=?, coach=?, contact=?, notes=?, is_active=?, updated_at=? WHERE id=?`)
-      .bind(input.seed, code, input.name, input.school, input.member_1, input.member_2, input.coach, input.contact, input.notes, isActive, now(), teamId).run();
+    await env.DB.prepare(`UPDATE teams SET seed=?, code=?, name=?, school=?, province=?,
+      member_1=?, member_1_level=?, member_1_room=?, member_1_student_id=?, member_1_phone=?,
+      member_2=?, member_2_level=?, member_2_room=?, member_2_student_id=?, member_2_phone=?,
+      coach=?, contact=?, notes=?, is_active=?, updated_at=? WHERE id=?`)
+      .bind(
+        input.seed, code, input.name, input.school, input.province,
+        input.member_1, input.member_1_level, input.member_1_room, input.member_1_student_id, input.member_1_phone,
+        input.member_2, input.member_2_level, input.member_2_room, input.member_2_student_id, input.member_2_phone,
+        input.coach, input.contact, input.notes, isActive, now(), teamId
+      ).run();
   } catch (cause) {
     return error('รหัสทีมซ้ำ กรุณาใช้รหัสอื่น', 409, String(cause));
   }
@@ -353,13 +450,114 @@ async function importTeams(request, env, tournamentId) {
     let suffix = 2;
     while (used.has(code.toLowerCase())) code = `${base}-${suffix++}`;
     used.add(code.toLowerCase());
-    statements.push(env.DB.prepare(`INSERT INTO teams (id, tournament_id, seed, code, name, school, member_1, member_2, coach, contact, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id(), tournamentId, team.seed === 9999 ? seed : team.seed, code, team.name, team.school, team.member_1, team.member_2, team.coach, team.contact, team.notes, now()));
+    statements.push(env.DB.prepare(`INSERT INTO teams (
+      id, tournament_id, seed, code, name, school, province,
+      member_1, member_1_level, member_1_room, member_1_student_id, member_1_phone,
+      member_2, member_2_level, member_2_room, member_2_student_id, member_2_phone,
+      coach, contact, notes, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(
+        id(), tournamentId, team.seed === 9999 ? seed : team.seed, code, team.name, team.school, team.province,
+        team.member_1, team.member_1_level, team.member_1_room, team.member_1_student_id, team.member_1_phone,
+        team.member_2, team.member_2_level, team.member_2_room, team.member_2_student_id, team.member_2_phone,
+        team.coach, team.contact, team.notes, now()
+      ));
   }
   await env.DB.batch(statements);
   await audit(env, tournamentId, 'team.import', { count: statements.length });
   return json({ ok: true, imported: statements.length });
+}
+
+async function previewDocxImport(request) {
+  const length = toInt(request.headers.get('content-length'), 0);
+  if (length > 8 * 1024 * 1024) return error('ไฟล์ Word ต้องมีขนาดไม่เกิน 8 MB');
+  const buffer = await request.arrayBuffer();
+  if (!buffer.byteLength) return error('กรุณาเลือกไฟล์ Word .docx');
+  if (buffer.byteLength > 8 * 1024 * 1024) return error('ไฟล์ Word ต้องมีขนาดไม่เกิน 8 MB');
+  const preview = parseDocxRegistration(buffer);
+  if (preview.team_count > 500) return error('เอกสารมีรายชื่อเกิน 500 ทีม กรุณาแบ่งเป็นหลายไฟล์');
+  return json({ ok: true, preview });
+}
+
+async function reserveTournamentCode(env, suggested, reserved) {
+  const base = slugify(suggested);
+  for (let suffix = 0; suffix < 1000; suffix += 1) {
+    const code = suffix ? `${base}-${suffix + 1}` : base;
+    if (reserved.has(code)) continue;
+    const existing = await env.DB.prepare('SELECT id FROM tournaments WHERE code = ?').bind(code).first();
+    if (!existing) {
+      reserved.add(code);
+      return code;
+    }
+  }
+  const fallback = `${base}-${id().slice(0, 6)}`;
+  reserved.add(fallback);
+  return fallback;
+}
+
+async function commitDocxImport(request, env) {
+  const payload = await bodyJson(request);
+  const groups = Array.isArray(payload.groups) ? payload.groups : [];
+  if (!groups.length) return error('กรุณาเลือกอย่างน้อยหนึ่งกลุ่มสำหรับสร้างทัวร์นาเมนต์');
+  if (groups.length > 10) return error('สร้างได้ครั้งละไม่เกิน 10 ทัวร์นาเมนต์');
+  const totalTeams = groups.reduce((sum, group) => sum + (Array.isArray(group.teams) ? group.teams.length : 0), 0);
+  if (!totalTeams) return error('ไม่พบทีมที่เลือกสำหรับนำเข้า');
+  if (totalTeams > 500) return error('นำเข้าได้ครั้งละไม่เกิน 500 ทีม');
+
+  const statements = [];
+  const created = [];
+  const reservedCodes = new Set();
+  for (const [groupIndex, group] of groups.entries()) {
+    const teams = Array.isArray(group.teams) ? group.teams : [];
+    if (!teams.length) continue;
+    const name = safeString(group.name, 160);
+    if (!name) return error(`กรุณาตั้งชื่อทัวร์นาเมนต์กลุ่มที่ ${groupIndex + 1}`);
+    const tournamentId = id();
+    const code = await reserveTournamentCode(env, group.code || name, reservedCodes);
+    const category = safeString(group.category || 'A-Math', 80);
+    const scoring = normalizeScoring(group.scoring);
+    const rules = normalizeRules(group.ranking_rules);
+    const timestamp = now();
+    statements.push(env.DB.prepare(`INSERT INTO tournaments (
+      id, code, name, academic_year, category, organizer, venue, starts_on, ends_on,
+      rounds_planned, scoring_json, ranking_rules_json, status, public_enabled, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, 'draft', 0, ?)`)
+      .bind(
+        tournamentId, code, name, safeString(group.academic_year, 50), category,
+        safeString(group.organizer, 160), safeString(group.venue, 160),
+        Math.max(1, Math.min(99, toInt(group.rounds_planned, 5))), JSON.stringify(scoring), JSON.stringify(rules), timestamp
+      ));
+    const prefix = category.includes('ต้น') ? 'JR' : category.includes('ปลาย') ? 'SR' : 'T';
+    teams.forEach((rawTeam, index) => {
+      const team = validateTeamInput({
+        ...rawTeam,
+        school: rawTeam.school || group.school,
+        province: rawTeam.province || group.province,
+        member_1_level: rawTeam.member_1_level || rawTeam.member_1_room || rawTeam.level,
+        member_2_level: rawTeam.member_2_level || rawTeam.member_2_room || rawTeam.level,
+        notes: rawTeam.notes || `นำเข้าจาก ${safeString(payload.source_name || 'เอกสาร Word', 160)}`
+      });
+      const teamCode = team.code || `${prefix}${String(index + 1).padStart(2, '0')}`;
+      statements.push(env.DB.prepare(`INSERT INTO teams (
+        id, tournament_id, seed, code, name, school, province,
+        member_1, member_1_level, member_1_room, member_1_student_id, member_1_phone,
+        member_2, member_2_level, member_2_room, member_2_student_id, member_2_phone,
+        coach, contact, notes, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(
+          id(), tournamentId, index + 1, teamCode, team.name, team.school, team.province,
+          team.member_1, team.member_1_level, team.member_1_room, team.member_1_student_id, team.member_1_phone,
+          team.member_2, team.member_2_level, team.member_2_room, team.member_2_student_id, team.member_2_phone,
+          team.coach, team.contact, team.notes, timestamp
+        ));
+    });
+    statements.push(env.DB.prepare('INSERT INTO audit_logs (id, tournament_id, action, detail_json) VALUES (?, ?, ?, ?)')
+      .bind(id(), tournamentId, 'tournament.import.docx', JSON.stringify({ source: safeString(payload.source_name, 160), teamCount: teams.length })));
+    created.push({ id: tournamentId, code, name, team_count: teams.length });
+  }
+  if (!created.length) return error('ไม่พบกลุ่มที่มีทีมสำหรับนำเข้า');
+  await env.DB.batch(statements);
+  return json({ ok: true, created }, 201);
 }
 
 function shuffle(items) {
@@ -510,11 +708,61 @@ async function updateMatch(request, env, matchId) {
   } else {
     scoreA = null; scoreB = null;
   }
-  await env.DB.prepare(`UPDATE matches SET score_a=?, score_b=?, result_a=?, result_b=?, winner_team_id=?, status=?, notes=?, updated_at=? WHERE id=?`)
-    .bind(scoreA, scoreB, resultA, resultB, winner, status, safeString(input.notes, 500), now(), matchId).run();
+  const starterTeamId = [match.team_a_id, match.team_b_id].includes(input.starter_team_id)
+    ? input.starter_team_id
+    : (input.starter_team_id === '' ? null : match.starter_team_id);
+  await env.DB.prepare(`UPDATE matches SET score_a=?, score_b=?, result_a=?, result_b=?, winner_team_id=?, starter_team_id=?, status=?, notes=?, updated_at=? WHERE id=?`)
+    .bind(scoreA, scoreB, resultA, resultB, winner, starterTeamId, status, safeString(input.notes, 500), now(), matchId).run();
   const roundStatus = await refreshRoundStatus(env, match.round_id);
   await audit(env, match.tournament_id, 'match.update', { matchId, roundId: match.round_id, status, roundStatus });
   return json({ ok: true, round_status: roundStatus, bundle: await getBundle(env, match.tournament_id) });
+}
+
+async function updateRoundResults(request, env, tournamentId, roundId) {
+  await ensureTournament(env, tournamentId);
+  const round = await env.DB.prepare('SELECT * FROM rounds WHERE id=? AND tournament_id=?').bind(roundId, tournamentId).first();
+  if (!round) return error('ไม่พบรอบแข่งขันนี้', 404);
+  const query = await env.DB.prepare('SELECT * FROM matches WHERE round_id=? ORDER BY table_no ASC').bind(roundId).all();
+  const matches = query.results.filter((match) => Number(match.is_bye) !== 1);
+  const input = await bodyJson(request);
+  const list = Array.isArray(input.matches) ? input.matches : [];
+  if (!matches.length) return error('รอบนี้ไม่มีคู่แข่งขันที่ต้องบันทึกผล');
+  if (list.length !== matches.length) return error('กรุณาส่งผลการแข่งขันให้ครบทุกคู่');
+  const payloadById = new Map(list.map((item) => [String(item.id || ''), item]));
+  if (payloadById.size !== list.length || matches.some((match) => !payloadById.has(String(match.id)))) {
+    return error('รายการผลการแข่งขันไม่ตรงกับคู่แข่งขันในรอบนี้');
+  }
+
+  const statements = [];
+  for (const match of matches) {
+    const item = payloadById.get(String(match.id));
+    const scoreA = toInt(item.score_a, NaN);
+    const scoreB = toInt(item.score_b, NaN);
+    if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB) || scoreA < 0 || scoreB < 0) {
+      return error(`โต๊ะ ${match.table_no}: กรุณากรอกคะแนนเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป`);
+    }
+    let resultA;
+    let resultB;
+    let winner = null;
+    if (scoreA > scoreB) { resultA = 'W'; resultB = 'L'; winner = match.team_a_id; }
+    else if (scoreB > scoreA) { resultA = 'L'; resultB = 'W'; winner = match.team_b_id; }
+    else {
+      resultA = 'D'; resultB = 'D';
+      const tieWinner = item.winner_team_id || null;
+      if (String(round.phase).startsWith('finals-')) {
+        if (![match.team_a_id, match.team_b_id].includes(tieWinner)) return error(`โต๊ะ ${match.table_no}: รอบชิงต้องระบุผู้ชนะกรณีคะแนนเสมอ`);
+        winner = tieWinner;
+      }
+    }
+    const starterTeamId = [match.team_a_id, match.team_b_id].includes(item.starter_team_id) ? item.starter_team_id : null;
+    statements.push(env.DB.prepare(`UPDATE matches SET score_a=?, score_b=?, result_a=?, result_b=?, winner_team_id=?, starter_team_id=?, status='final', notes=?, updated_at=? WHERE id=? AND round_id=?`)
+      .bind(scoreA, scoreB, resultA, resultB, winner, starterTeamId, safeString(item.notes, 500), now(), match.id, roundId));
+  }
+
+  await env.DB.batch(statements);
+  const roundStatus = await refreshRoundStatus(env, roundId);
+  await audit(env, tournamentId, 'round.results.update', { roundId, matchCount: statements.length, roundStatus });
+  return json({ ok: true, round_status: roundStatus, bundle: await getBundle(env, tournamentId) });
 }
 
 function winnerOf(match) {
@@ -615,7 +863,7 @@ async function importTournament(request, env) {
   const sourceMatches = Array.isArray(payload.matches) ? payload.matches : [];
   if (sourceTeams.length > 300 || sourceRounds.length > 150 || sourceMatches.length > 5000) return error('ข้อมูลสำรองมีขนาดเกินขอบเขตที่ระบบรับได้');
   const tournamentId = id();
-  const code = await uniqueCode(`${sourceTournament.code || sourceTournament.name || 'koth'}-copy`);
+  const code = await uniqueCode(env, `${sourceTournament.code || sourceTournament.name || 'koth'}-copy`);
   const teamMap = new Map(sourceTeams.map((team) => [team.id, id()]));
   const roundMap = new Map(sourceRounds.map((round) => [round.id, id()]));
   const scoring = normalizeScoring(sourceTournament.scoring || parseJson(sourceTournament.scoring_json, DEFAULT_SCORING));
@@ -626,9 +874,18 @@ async function importTournament(request, env) {
       .bind(tournamentId, code, `${safeString(sourceTournament.name, 140)} (สำเนา)`, safeString(sourceTournament.academic_year, 50), safeString(sourceTournament.category || 'A-Math', 80), safeString(sourceTournament.organizer, 160), safeString(sourceTournament.venue, 160), safeString(sourceTournament.starts_on, 20), safeString(sourceTournament.ends_on, 20), Math.max(1, toInt(sourceTournament.rounds_planned, 5)), JSON.stringify(scoring), JSON.stringify(rules), ['draft', 'open', 'completed'].includes(sourceTournament.status) ? sourceTournament.status : 'draft', sourceTournament.public_enabled ? 1 : 0, now())
   ];
   for (const source of sourceTeams) {
-    statements.push(env.DB.prepare(`INSERT INTO teams (id,tournament_id,seed,code,name,school,member_1,member_2,coach,contact,notes,is_active,updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(teamMap.get(source.id), tournamentId, Math.max(1, toInt(source.seed, 9999)), safeString(source.code, 24), safeString(source.name, 120), safeString(source.school, 160), safeString(source.member_1, 120), safeString(source.member_2, 120), safeString(source.coach, 120), safeString(source.contact, 160), safeString(source.notes, 500), source.is_active === false ? 0 : 1, now()));
+    statements.push(env.DB.prepare(`INSERT INTO teams (
+      id,tournament_id,seed,code,name,school,province,
+      member_1,member_1_level,member_1_room,member_1_student_id,member_1_phone,
+      member_2,member_2_level,member_2_room,member_2_student_id,member_2_phone,
+      coach,contact,notes,is_active,updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(
+        teamMap.get(source.id), tournamentId, Math.max(1, toInt(source.seed, 9999)), safeString(source.code, 24), safeString(source.name, 120), safeString(source.school, 160), safeString(source.province, 100),
+        safeString(source.member_1, 120), safeString(source.member_1_level, 60), safeString(source.member_1_room, 60), safeString(source.member_1_student_id, 40), safeString(source.member_1_phone, 40),
+        safeString(source.member_2, 120), safeString(source.member_2_level, 60), safeString(source.member_2_room, 60), safeString(source.member_2_student_id, 40), safeString(source.member_2_phone, 40),
+        safeString(source.coach, 120), safeString(source.contact, 160), safeString(source.notes, 500), source.is_active === false ? 0 : 1, now()
+      ));
   }
   for (const source of sourceRounds) {
     statements.push(env.DB.prepare(`INSERT INTO rounds (id,tournament_id,phase,round_number,title,diff_cap,status,pairing_note,updated_at)
@@ -637,10 +894,10 @@ async function importTournament(request, env) {
   }
   for (const source of sourceMatches) {
     if (!roundMap.has(source.round_id) || !teamMap.has(source.team_a_id)) continue;
-    statements.push(env.DB.prepare(`INSERT INTO matches (id,round_id,table_no,team_a_id,team_b_id,score_a,score_b,result_a,result_b,winner_team_id,is_bye,status,notes,updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    statements.push(env.DB.prepare(`INSERT INTO matches (id,round_id,table_no,team_a_id,team_b_id,score_a,score_b,result_a,result_b,winner_team_id,starter_team_id,is_bye,status,notes,updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id(), roundMap.get(source.round_id), Math.max(1, toInt(source.table_no, 1)), teamMap.get(source.team_a_id), source.team_b_id ? teamMap.get(source.team_b_id) || null : null,
-        source.score_a === null ? null : toInt(source.score_a, 0), source.score_b === null ? null : toInt(source.score_b, 0), safeString(source.result_a, 10), safeString(source.result_b, 10), source.winner_team_id ? teamMap.get(source.winner_team_id) || null : null, source.is_bye ? 1 : 0, source.status === 'final' ? 'final' : 'pending', safeString(source.notes, 500), now()));
+        source.score_a === null ? null : toInt(source.score_a, 0), source.score_b === null ? null : toInt(source.score_b, 0), safeString(source.result_a, 10), safeString(source.result_b, 10), source.winner_team_id ? teamMap.get(source.winner_team_id) || null : null, source.starter_team_id ? teamMap.get(source.starter_team_id) || null : null, source.is_bye ? 1 : 0, source.status === 'final' ? 'final' : 'pending', safeString(source.notes, 500), now()));
   }
   await env.DB.batch(statements);
   await audit(env, tournamentId, 'tournament.import', { sourceName: sourceTournament.name });
@@ -671,12 +928,80 @@ async function publicTournament(env, code) {
   });
 }
 
-async function login(request, env) {
-  if (!env.ADMIN_PASSWORD || !env.AUTH_SECRET) return error('ยังไม่ได้กำหนด ADMIN_PASSWORD และ AUTH_SECRET บน Cloudflare', 503);
+async function listAdmins(env, currentUser) {
+  const query = await env.DB.prepare('SELECT id, username, display_name, created_at FROM admin_users WHERE is_active = 1 ORDER BY created_at ASC, username ASC').all();
+  const admins = query.results.map(asAdminUser);
+  if (env.ADMIN_PASSWORD) admins.unshift(environmentAdmin());
+  return json({ ok: true, admins, current_user: currentUser });
+}
+
+async function createAdmin(request, env, currentUser) {
   const input = await bodyJson(request);
-  if (!constantTimeEqual(safeString(input.password, 300), env.ADMIN_PASSWORD)) return error('รหัสผ่านไม่ถูกต้อง', 401);
-  const token = await makeSession(env);
-  return json({ ok: true, user: { role: 'admin' } }, 200, { 'set-cookie': sessionCookie(token) });
+  const username = normalizeAdminUsername(input.username);
+  const displayName = safeString(input.display_name, 120);
+  const password = normalizePassword(input.password);
+
+  if (!validateAdminUsername(username)) return error('ชื่อผู้ใช้ต้องมี 3–40 ตัว และใช้ได้เฉพาะ a-z, 0-9, จุด ขีดกลาง หรือขีดล่าง');
+  if (username === 'admin') return error('ชื่อผู้ใช้ admin สงวนไว้สำหรับผู้ดูแลหลัก');
+  if (!displayName) return error('กรุณาระบุชื่อที่ใช้แสดง');
+  if (password.length < 10) return error('รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร');
+  const existing = await env.DB.prepare('SELECT id FROM admin_users WHERE username = ? COLLATE NOCASE').bind(username).first();
+  if (existing) return error('ชื่อผู้ใช้นี้มีอยู่แล้ว');
+
+  const passwordRecord = await hashPassword(password);
+  const adminId = id();
+  await env.DB.prepare(`INSERT INTO admin_users (
+    id, username, display_name, password_hash, password_salt, password_iterations, is_active, created_by, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+    .bind(
+      adminId,
+      username,
+      displayName,
+      passwordRecord.hash,
+      passwordRecord.salt,
+      passwordRecord.iterations,
+      currentUser.username,
+      now()
+    ).run();
+  await audit(env, null, 'admin.create', { admin_id: adminId, username, display_name: displayName, created_by: currentUser.username });
+  const created = await env.DB.prepare('SELECT id, username, display_name, created_at FROM admin_users WHERE id = ?').bind(adminId).first();
+  return json({ ok: true, admin: asAdminUser(created) }, 201);
+}
+
+async function deleteAdmin(env, adminId, currentUser) {
+  if (adminId === 'env-admin') return error('ไม่สามารถลบผู้ดูแลหลักของระบบได้');
+  if (adminId === currentUser.id) return error('ไม่สามารถลบบัญชีที่กำลังใช้งานอยู่ได้');
+  const target = await env.DB.prepare('SELECT id, username, display_name FROM admin_users WHERE id = ? AND is_active = 1').bind(adminId).first();
+  if (!target) return error('ไม่พบบัญชีผู้ดูแลนี้', 404);
+  if (!env.ADMIN_PASSWORD) {
+    const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM admin_users WHERE is_active = 1').first();
+    if (toInt(count?.total) <= 1) return error('ต้องเหลือผู้ดูแลอย่างน้อย 1 บัญชี');
+  }
+  await env.DB.prepare('DELETE FROM admin_users WHERE id = ?').bind(adminId).run();
+  await audit(env, null, 'admin.delete', { admin_id: adminId, username: target.username, display_name: target.display_name, deleted_by: currentUser.username });
+  return json({ ok: true, deleted: { id: adminId, username: target.username, display_name: target.display_name } });
+}
+
+async function login(request, env) {
+  if (!env.AUTH_SECRET) return error('ยังไม่ได้กำหนด AUTH_SECRET บน Cloudflare', 503);
+  const input = await bodyJson(request);
+  const username = normalizeAdminUsername(input.username || 'admin');
+  const password = normalizePassword(input.password);
+  let user = null;
+
+  try {
+    const record = await env.DB.prepare('SELECT * FROM admin_users WHERE username = ? COLLATE NOCASE AND is_active = 1').bind(username).first();
+    if (record && await verifyPassword(password, record)) user = asAdminUser(record);
+  } catch (cause) {
+    console.warn('Admin table is not ready; using environment administrator fallback', cause);
+  }
+
+  if (!user && username === 'admin' && env.ADMIN_PASSWORD && constantTimeEqual(password, env.ADMIN_PASSWORD)) {
+    user = environmentAdmin();
+  }
+  if (!user) return error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 401);
+  const token = await makeSession(env, user);
+  return json({ ok: true, user }, 200, { 'set-cookie': sessionCookie(token) });
 }
 
 function notFound() {
@@ -692,17 +1017,28 @@ export default {
       if (request.method === 'GET' && path === '/api/health') return json({ ok: true, service: 'A-Math KOTH Manager', time: now() });
       if (request.method === 'POST' && path === '/api/auth/login') return login(request, env);
       if (request.method === 'POST' && path === '/api/auth/logout') return json({ ok: true }, 200, { 'set-cookie': clearSessionCookie() });
-      if (request.method === 'GET' && path === '/api/auth/me') return json({ ok: true, authenticated: await verifySession(request, env), user: (await verifySession(request, env)) ? { role: 'admin' } : null });
+      if (request.method === 'GET' && path === '/api/auth/me') {
+        const user = await verifySession(request, env);
+        return json({ ok: true, authenticated: Boolean(user), user: user || null });
+      }
       if (request.method === 'GET' && path.startsWith('/api/public/tournaments/')) return publicTournament(env, decodeURIComponent(path.split('/').at(-1)));
 
-      const denied = await requireAuth(request, env);
-      if (denied) return denied;
+      const currentUser = await verifySession(request, env);
+      if (!currentUser) return error('กรุณาเข้าสู่ระบบผู้ดูแล', 401);
+
+      if (request.method === 'GET' && path === '/api/admins') return listAdmins(env, currentUser);
+      if (request.method === 'POST' && path === '/api/admins') return createAdmin(request, env, currentUser);
 
       if (request.method === 'GET' && path === '/api/tournaments') return json({ ok: true, tournaments: await listTournaments(env) });
       if (request.method === 'POST' && path === '/api/tournaments') return createTournament(request, env);
       if (request.method === 'POST' && path === '/api/tournaments/import') return importTournament(request, env);
+      if (request.method === 'POST' && path === '/api/documents/docx/preview') return previewDocxImport(request);
+      if (request.method === 'POST' && path === '/api/documents/docx/commit') return commitDocxImport(request, env);
 
       const parts = path.split('/').filter(Boolean);
+      if (parts[1] === 'admins' && parts[2] && parts.length === 3 && request.method === 'DELETE') {
+        return deleteAdmin(env, decodeURIComponent(parts[2]), currentUser);
+      }
       // /api/tournaments/:id
       if (parts[1] === 'tournaments' && parts[2]) {
         const tournamentId = decodeURIComponent(parts[2]);
@@ -711,6 +1047,7 @@ export default {
           return bundle ? json({ ok: true, ...bundle, rounds: groupRounds(bundle), finals: await getFinalStatus(env, tournamentId) }) : error('ไม่พบรายการแข่งขัน', 404);
         }
         if (parts.length === 3 && request.method === 'PATCH') return updateTournament(request, env, tournamentId);
+        if (parts.length === 3 && request.method === 'DELETE') return deleteTournament(request, env, tournamentId);
         if (parts.length === 4 && parts[3] === 'teams' && request.method === 'GET') {
           const teams = await env.DB.prepare('SELECT * FROM teams WHERE tournament_id=? ORDER BY is_active DESC, seed ASC, name').bind(tournamentId).all();
           return json({ ok: true, teams: teams.results.map(asTeam) });
@@ -724,6 +1061,7 @@ export default {
         }
         if (parts.length === 4 && parts[3] === 'rounds' && request.method === 'POST') return generateKothRound(request, env, tournamentId);
         if (parts.length === 6 && parts[3] === 'rounds' && parts[5] === 'matches' && request.method === 'PUT') return replaceRoundMatches(request, env, tournamentId, decodeURIComponent(parts[4]));
+        if (parts.length === 6 && parts[3] === 'rounds' && parts[5] === 'results' && request.method === 'PATCH') return updateRoundResults(request, env, tournamentId, decodeURIComponent(parts[4]));
         if (parts.length === 4 && parts[3] === 'finals' && request.method === 'POST') return generateFinals(request, env, tournamentId);
         if (parts.length === 4 && parts[3] === 'finals' && request.method === 'GET') return json({ ok: true, ...(await getFinalStatus(env, tournamentId)) });
         if (parts.length === 4 && parts[3] === 'export' && request.method === 'GET') return exportTournament(env, tournamentId);
