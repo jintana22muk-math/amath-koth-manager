@@ -50,6 +50,7 @@ test('document exports bundle and load TH Sarabun PSK faces', async () => {
 
   const styles = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const worker = await readFile(new URL('../src/worker.js', import.meta.url), 'utf8');
   assert.match(styles, /font-family: "TH Sarabun PSK"/);
   assert.match(app, /loadDocumentFonts/);
   assert.match(app, /document\.fonts\.load\('700 24px "TH Sarabun PSK"'/);
@@ -64,4 +65,8 @@ test('document exports bundle and load TH Sarabun PSK faces', async () => {
   assert.match(app, /mode === 'empty' \? \[null\] : teams/);
   assert.match(app, /team\.member_1, 275, 263, 275/);
   assert.match(app, /team\.member_2, 905, 263, 312/);
+  assert.match(app, /data-action="submit-round-results"/);
+  assert.match(app, /กรุณากรอกคะแนนให้ครบทุกคู่ก่อนยืนยันผลทั้งหมด/);
+  assert.match(worker, /async function updateRoundResults/);
+  assert.match(worker, /parts\[5\] === 'results' && request\.method === 'PATCH'/);
 });

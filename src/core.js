@@ -7,6 +7,8 @@ export const DEFAULT_SCORING = Object.freeze({
   round_caps: [250, 250, 250, 250, 200]
 });
 
+export const BYE_DIFFERENTIAL = 100;
+
 export const DEFAULT_RANKING_RULES = Object.freeze([
   'points',
   'capped_diff',
@@ -117,6 +119,9 @@ export function computeRankings({ teams = [], rounds = [], matches = [], scoring
     if (Number(match.is_bye) === 1 || !match.team_b_id) {
       a.points += cfg.bye_points;
       a.byes += 1;
+      a.points_for += BYE_DIFFERENTIAL;
+      a.raw_diff += BYE_DIFFERENTIAL;
+      a.capped_diff += BYE_DIFFERENTIAL;
       continue;
     }
     if (!b || match.score_a === null || match.score_b === null || match.score_a === undefined || match.score_b === undefined) continue;

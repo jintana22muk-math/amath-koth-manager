@@ -265,7 +265,7 @@ function renderMatchRow(match, round) {
 function renderRounds(data) {
   const allRounds = data.rounds;
   if (!allRounds.length) return `<section class="card empty"><div class="empty-icon">↔</div><h3>ยังไม่มีการจับคู่</h3><p>เมื่อพร้อมแล้วให้สร้างเกมคิงออฟเดอะฮิลล์ (KOTH) แรก ระบบจะเรียงตามลำดับเริ่มต้น (Seed) หรือสุ่มตามที่เลือก</p></section>`;
-  return allRounds.slice().reverse().map((round, index) => `<section class="card round-card ${index === 0 ? 'latest-round' : ''}"><header class="round-title"><div><span class="section-kicker">${index === 0 ? 'ล่าสุด' : 'รอบก่อนหน้า'}</span><h4>${escapeHtml(round.title)}</h4><p>${round.phase === 'koth' ? `เกมคิงออฟเดอะฮิลล์ (KOTH) ${round.round_number} · เพดานผลต่าง ±${round.diff_cap}` : round.phase === 'finals-semifinal' ? '4 อันดับแรก (Top 4) · อันดับ 1 พบ 4 และอันดับ 2 พบ 3' : 'รอบชิงชนะเลิศและชิงอันดับ 3'}</p>${round.pairing_note ? `<p class="notice warning" style="margin:8px 0 0">${escapeHtml(round.pairing_note)}</p>` : ''}</div><div class="button-row"><button class="button secondary small" data-action="export-pairing-sheet" data-id="${escapeHtml(round.id)}">พิมพ์ใบจับคู่เกมนี้</button>${badge(round.status)}${round.status !== 'completed' ? `<button class="button ghost small" data-action="edit-pairings" data-id="${escapeHtml(round.id)}">แก้ไขคู่</button>` : ''}</div></header><div class="match-list">${round.matches.map((match) => renderMatchRow(match, round)).join('')}</div></section>`).join('');
+  return allRounds.slice().reverse().map((round, index) => `<section class="card round-card ${index === 0 ? 'latest-round' : ''}"><header class="round-title"><div><span class="section-kicker">${index === 0 ? 'ล่าสุด' : 'รอบก่อนหน้า'}</span><h4>${escapeHtml(round.title)}</h4><p>${round.phase === 'koth' ? `เกมคิงออฟเดอะฮิลล์ (KOTH) ${round.round_number} · เพดานผลต่าง ±${round.diff_cap}` : round.phase === 'finals-semifinal' ? '4 อันดับแรก (Top 4) · อันดับ 1 พบ 4 และอันดับ 2 พบ 3' : 'รอบชิงชนะเลิศและชิงอันดับ 3'}</p>${round.pairing_note ? `<p class="notice warning" style="margin:8px 0 0">${escapeHtml(round.pairing_note)}</p>` : ''}</div><div class="button-row"><button class="button secondary small" data-action="export-pairing-sheet" data-id="${escapeHtml(round.id)}">พิมพ์ใบจับคู่เกมนี้</button>${round.status !== 'completed' ? `<button class="button primary small" data-action="submit-round-results" data-id="${escapeHtml(round.id)}">ยืนยันผลทั้งหมด</button>` : ''}${badge(round.status)}${round.status !== 'completed' ? `<button class="button ghost small" data-action="edit-pairings" data-id="${escapeHtml(round.id)}">แก้ไขคู่</button>` : ''}</div></header><div class="match-list">${round.matches.map((match) => renderMatchRow(match, round)).join('')}</div></section>`).join('');
 }
 
 function finalControls(data) {
@@ -732,6 +732,25 @@ async function handleAction(event) {
   if (action === 'import-docx') { openDocxImport(); return; }
   if (action === 'export-master-card') { await exportMasterCards(button.dataset.mode || 'blank'); return; }
   if (action === 'export-pairing-sheet') { await exportPairingSheet(button.dataset.id); return; }
+  if (action === 'submit-round-results') {
+    const card = button.closest('.round-card');
+    const forms = [...(card?.querySelectorAll('form[data-form="match"]') || [])];
+    if (!forms.length) { notify('รอบนี้ไม่มีคู่แข่งขันที่ต้องบันทึกผล', 'error'); return; }
+    const invalid = forms.find((form) => !form.reportValidity());
+    if (invalid) { notify('กรุณากรอกคะแนนให้ครบทุกคู่ก่อนยืนยันผลทั้งหมด', 'error'); return; }
+    const matches = forms.map((form) => ({ id: form.dataset.matchId, ...Object.fromEntries(new FormData(form).entries()) }));
+    button.disabled = true;
+    try {
+      await api(`/api/tournaments/${state.selectedId}/rounds/${button.dataset.id}/results`, { method: 'PATCH', body: JSON.stringify({ matches }) });
+      await loadTournament();
+      render();
+      notify(`ยืนยันผลทั้งหมด ${matches.length} คู่เรียบร้อย`, 'success');
+    } catch (error) {
+      button.disabled = false;
+      notify(error.message, 'error');
+    }
+    return;
+  }
   if (action === 'select-tournament') { setSelected(button.dataset.id); state.view = 'dashboard'; await loadTournament(); render(); return; }
   if (action === 'edit-team') { const team = state.data?.teams.find((item) => item.id === button.dataset.id); if (team) editTeamModal(team); return; }
   if (action === 'restore-team') {

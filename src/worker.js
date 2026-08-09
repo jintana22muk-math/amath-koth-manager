@@ -718,6 +718,53 @@ async function updateMatch(request, env, matchId) {
   return json({ ok: true, round_status: roundStatus, bundle: await getBundle(env, match.tournament_id) });
 }
 
+async function updateRoundResults(request, env, tournamentId, roundId) {
+  await ensureTournament(env, tournamentId);
+  const round = await env.DB.prepare('SELECT * FROM rounds WHERE id=? AND tournament_id=?').bind(roundId, tournamentId).first();
+  if (!round) return error('ไม่พบรอบแข่งขันนี้', 404);
+  const query = await env.DB.prepare('SELECT * FROM matches WHERE round_id=? ORDER BY table_no ASC').bind(roundId).all();
+  const matches = query.results.filter((match) => Number(match.is_bye) !== 1);
+  const input = await bodyJson(request);
+  const list = Array.isArray(input.matches) ? input.matches : [];
+  if (!matches.length) return error('รอบนี้ไม่มีคู่แข่งขันที่ต้องบันทึกผล');
+  if (list.length !== matches.length) return error('กรุณาส่งผลการแข่งขันให้ครบทุกคู่');
+  const payloadById = new Map(list.map((item) => [String(item.id || ''), item]));
+  if (payloadById.size !== list.length || matches.some((match) => !payloadById.has(String(match.id)))) {
+    return error('รายการผลการแข่งขันไม่ตรงกับคู่แข่งขันในรอบนี้');
+  }
+
+  const statements = [];
+  for (const match of matches) {
+    const item = payloadById.get(String(match.id));
+    const scoreA = toInt(item.score_a, NaN);
+    const scoreB = toInt(item.score_b, NaN);
+    if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB) || scoreA < 0 || scoreB < 0) {
+      return error(`โต๊ะ ${match.table_no}: กรุณากรอกคะแนนเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป`);
+    }
+    let resultA;
+    let resultB;
+    let winner = null;
+    if (scoreA > scoreB) { resultA = 'W'; resultB = 'L'; winner = match.team_a_id; }
+    else if (scoreB > scoreA) { resultA = 'L'; resultB = 'W'; winner = match.team_b_id; }
+    else {
+      resultA = 'D'; resultB = 'D';
+      const tieWinner = item.winner_team_id || null;
+      if (String(round.phase).startsWith('finals-')) {
+        if (![match.team_a_id, match.team_b_id].includes(tieWinner)) return error(`โต๊ะ ${match.table_no}: รอบชิงต้องระบุผู้ชนะกรณีคะแนนเสมอ`);
+        winner = tieWinner;
+      }
+    }
+    const starterTeamId = [match.team_a_id, match.team_b_id].includes(item.starter_team_id) ? item.starter_team_id : null;
+    statements.push(env.DB.prepare(`UPDATE matches SET score_a=?, score_b=?, result_a=?, result_b=?, winner_team_id=?, starter_team_id=?, status='final', notes=?, updated_at=? WHERE id=? AND round_id=?`)
+      .bind(scoreA, scoreB, resultA, resultB, winner, starterTeamId, safeString(item.notes, 500), now(), match.id, roundId));
+  }
+
+  await env.DB.batch(statements);
+  const roundStatus = await refreshRoundStatus(env, roundId);
+  await audit(env, tournamentId, 'round.results.update', { roundId, matchCount: statements.length, roundStatus });
+  return json({ ok: true, round_status: roundStatus, bundle: await getBundle(env, tournamentId) });
+}
+
 function winnerOf(match) {
   if (match.winner_team_id) return match.winner_team_id;
   const a = toInt(match.score_a, 0);
@@ -1014,6 +1061,7 @@ export default {
         }
         if (parts.length === 4 && parts[3] === 'rounds' && request.method === 'POST') return generateKothRound(request, env, tournamentId);
         if (parts.length === 6 && parts[3] === 'rounds' && parts[5] === 'matches' && request.method === 'PUT') return replaceRoundMatches(request, env, tournamentId, decodeURIComponent(parts[4]));
+        if (parts.length === 6 && parts[3] === 'rounds' && parts[5] === 'results' && request.method === 'PATCH') return updateRoundResults(request, env, tournamentId, decodeURIComponent(parts[4]));
         if (parts.length === 4 && parts[3] === 'finals' && request.method === 'POST') return generateFinals(request, env, tournamentId);
         if (parts.length === 4 && parts[3] === 'finals' && request.method === 'GET') return json({ ok: true, ...(await getFinalStatus(env, tournamentId)) });
         if (parts.length === 4 && parts[3] === 'export' && request.method === 'GET') return exportTournament(env, tournamentId);
