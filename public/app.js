@@ -488,22 +488,22 @@ function drawMasterCard(context, template, team, mode) {
   context.drawImage(template, 0, 0, 1536, 1024);
   if (mode === 'empty' || !team) return;
   const ranking = state.data.standings.find((row) => row.id === team.id)?.rank;
-  drawFittedText(context, team.code, 1293, 105, 120, { align: 'center', size: 25 });
-  drawFittedText(context, mode === 'complete' ? ranking : team.seed, 1435, 105, 110, { align: 'center', size: 25 });
+  drawFittedText(context, team.code, 1293, 105, 120, { align: 'center', size: 32 });
+  drawFittedText(context, mode === 'complete' ? ranking : team.seed, 1435, 105, 110, { align: 'center', size: 32 });
 
-  drawFittedText(context, team.member_1, 275, 263, 275, { size: 20 });
-  drawFittedText(context, team.member_1_level || team.member_1_room, 660, 263, 78, { size: 18 });
-  drawFittedText(context, team.school, 240, 310, 310, { size: 19 });
-  drawFittedText(context, team.province, 650, 310, 88, { size: 18 });
-  drawFittedText(context, team.member_1_student_id, 330, 357, 175, { size: 18 });
-  drawFittedText(context, team.member_1_phone, 630, 357, 107, { size: 18 });
+  drawFittedText(context, team.member_1, 275, 263, 275, { size: 26 });
+  drawFittedText(context, team.member_1_level || team.member_1_room, 660, 263, 78, { size: 22 });
+  drawFittedText(context, team.school, 240, 310, 310, { size: 24 });
+  drawFittedText(context, team.province, 650, 310, 88, { size: 22 });
+  drawFittedText(context, team.member_1_student_id, 330, 357, 175, { size: 22 });
+  drawFittedText(context, team.member_1_phone, 630, 357, 107, { size: 22 });
 
-  drawFittedText(context, team.member_2, 905, 263, 312, { size: 20 });
-  drawFittedText(context, team.member_2_level || team.member_2_room, 1330, 263, 64, { size: 17 });
-  drawFittedText(context, team.school, 880, 310, 338, { size: 19 });
-  drawFittedText(context, team.province, 1320, 310, 76, { size: 17 });
-  drawFittedText(context, team.member_2_student_id, 975, 357, 195, { size: 18 });
-  drawFittedText(context, team.member_2_phone, 1305, 357, 89, { size: 17 });
+  drawFittedText(context, team.member_2, 905, 263, 312, { size: 26 });
+  drawFittedText(context, team.member_2_level || team.member_2_room, 1330, 263, 64, { size: 22 });
+  drawFittedText(context, team.school, 880, 310, 338, { size: 24 });
+  drawFittedText(context, team.province, 1320, 310, 76, { size: 21 });
+  drawFittedText(context, team.member_2_student_id, 975, 357, 195, { size: 22 });
+  drawFittedText(context, team.member_2_phone, 1305, 357, 89, { size: 21 });
 
   if (mode !== 'complete') return;
   const columns = [66, 153, 223, 321, 453, 574, 688, 804, 951, 1147, 1328, 1455];
@@ -511,7 +511,7 @@ function drawMasterCard(context, template, team, mode) {
     const y = 503 + index * 38.7;
     const values = [match.table, match.round, match.result, match.points, match.scoreFor, match.scoreAgainst, match.diff, match.accumulatedDiff, match.opponentName, match.opponentSchool, match.opponentCode, match.starter];
     const widths = [70, 64, 50, 115, 105, 105, 100, 105, 160, 198, 128, 88];
-    values.forEach((value, columnIndex) => drawFittedText(context, value, columns[columnIndex], y, widths[columnIndex], { align: 'center', size: columnIndex >= 8 ? 16 : 18, weight: columnIndex >= 8 ? 400 : 700 }));
+    values.forEach((value, columnIndex) => drawFittedText(context, value, columns[columnIndex], y, widths[columnIndex], { align: 'center', size: columnIndex >= 8 ? 18 : 20, weight: columnIndex >= 8 ? 400 : 700 }));
   });
 }
 

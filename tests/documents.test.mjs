@@ -64,8 +64,10 @@ test('document exports bundle and load TH Sarabun PSK faces', async () => {
   assert.match(app, /สร้างใบมาสเตอร์เปล่า \(PDF\)/);
   assert.match(app, /data-mode="empty"/);
   assert.match(app, /mode === 'empty' \? \[null\] : teams/);
-  assert.match(app, /team\.member_1, 275, 263, 275/);
-  assert.match(app, /team\.member_2, 905, 263, 312/);
+  assert.match(app, /team\.member_1, 275, 263, 275, \{ size: 26 \}/);
+  assert.match(app, /team\.member_2, 905, 263, 312, \{ size: 26 \}/);
+  assert.match(app, /team\.code, 1293, 105, 120, \{ align: 'center', size: 32 \}/);
+  assert.match(app, /size: columnIndex >= 8 \? 18 : 20/);
   assert.match(app, /data-action="submit-round-results"/);
   assert.match(app, /กรุณากรอกคะแนนให้ครบทุกคู่ก่อนยืนยันผลทั้งหมด/);
   assert.match(worker, /async function updateRoundResults/);
