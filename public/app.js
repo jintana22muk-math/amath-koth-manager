@@ -121,7 +121,7 @@ function renderMobileHeader(tournament) {
   const detail = tournament
     ? [tournament.category, tournament.academic_year].filter(Boolean).join(' · ') || 'แตะเพื่อดูทัวร์นาเมนต์ทั้งหมด'
     : 'ยังไม่ได้เลือกทัวร์นาเมนต์';
-  return `<header class="mobile-appbar"><div class="mobile-appbar-brand"><span class="mobile-appbar-logo">A</span><div><strong>${escapeHtml(short(name, 34))}</strong><span>${escapeHtml(detail)}</span></div></div><button class="mobile-appbar-switch" data-action="go-tournaments" type="button">เปลี่ยนรายการ</button></header>`;
+  return `<header class="mobile-appbar"><div class="mobile-appbar-brand"><span class="mobile-appbar-logo">A</span><div><strong>${escapeHtml(short(name, 34))}</strong><span>${escapeHtml(detail)}</span></div></div><button class="mobile-appbar-switch" data-action="go-tournaments" type="button">รายการ</button></header>`;
 }
 
 function renderMobileNavigation() {
@@ -411,6 +411,16 @@ function canvasBlob(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('สร้างภาพเอกสารไม่สำเร็จ')), 'image/jpeg', 0.95));
 }
 
+async function loadDocumentFonts() {
+  if (!document.fonts?.load) return;
+  const sample = 'กขค A-Math 123';
+  const [regular, bold] = await Promise.all([
+    document.fonts.load('400 24px "TH Sarabun PSK"', sample),
+    document.fonts.load('700 24px "TH Sarabun PSK"', sample)
+  ]);
+  if (!regular.length || !bold.length) throw new Error('โหลดฟอนต์ TH Sarabun PSK สำหรับเอกสารไม่สำเร็จ');
+}
+
 function drawFittedText(context, value, x, y, maxWidth, options = {}) {
   const text = String(value ?? '').trim();
   if (!text) return;
@@ -421,7 +431,7 @@ function drawFittedText(context, value, x, y, maxWidth, options = {}) {
   context.textBaseline = 'middle';
   context.fillStyle = options.color || '#073785';
   do {
-    context.font = `${weight} ${size}px "IBM Plex Sans Thai", "Noto Sans Thai", sans-serif`;
+    context.font = `${weight} ${size}px "TH Sarabun PSK", "IBM Plex Sans Thai", sans-serif`;
     if (context.measureText(text).width <= maxWidth || size <= 9) break;
     size -= 1;
   } while (size > 8);
@@ -469,22 +479,22 @@ function drawMasterCard(context, template, team, mode) {
   context.clearRect(0, 0, 1536, 1024);
   context.drawImage(template, 0, 0, 1536, 1024);
   const ranking = state.data.standings.find((row) => row.id === team.id)?.rank;
-  drawFittedText(context, team.code, 1293, 105, 120, { align: 'center', size: 20 });
-  drawFittedText(context, mode === 'complete' ? ranking : team.seed, 1435, 105, 110, { align: 'center', size: 20 });
+  drawFittedText(context, team.code, 1293, 105, 120, { align: 'center', size: 25 });
+  drawFittedText(context, mode === 'complete' ? ranking : team.seed, 1435, 105, 110, { align: 'center', size: 25 });
 
-  drawFittedText(context, team.member_1, 265, 263, 285, { size: 16 });
-  drawFittedText(context, team.member_1_level || team.member_1_room, 615, 263, 118, { size: 15 });
-  drawFittedText(context, team.school, 235, 310, 320, { size: 15 });
-  drawFittedText(context, team.province, 610, 310, 120, { size: 15 });
-  drawFittedText(context, team.member_1_student_id, 305, 357, 200, { size: 14 });
-  drawFittedText(context, team.member_1_phone, 600, 357, 135, { size: 14 });
+  drawFittedText(context, team.member_1, 265, 263, 285, { size: 22 });
+  drawFittedText(context, team.member_1_level || team.member_1_room, 615, 263, 118, { size: 20 });
+  drawFittedText(context, team.school, 235, 310, 320, { size: 20 });
+  drawFittedText(context, team.province, 610, 310, 120, { size: 20 });
+  drawFittedText(context, team.member_1_student_id, 305, 357, 200, { size: 19 });
+  drawFittedText(context, team.member_1_phone, 600, 357, 135, { size: 19 });
 
-  drawFittedText(context, team.member_2, 882, 263, 330, { size: 16 });
-  drawFittedText(context, team.member_2_level || team.member_2_room, 1260, 263, 120, { size: 15 });
-  drawFittedText(context, team.school, 850, 310, 370, { size: 15 });
-  drawFittedText(context, team.province, 1255, 310, 135, { size: 15 });
-  drawFittedText(context, team.member_2_student_id, 930, 357, 235, { size: 14 });
-  drawFittedText(context, team.member_2_phone, 1250, 357, 140, { size: 14 });
+  drawFittedText(context, team.member_2, 882, 263, 330, { size: 22 });
+  drawFittedText(context, team.member_2_level || team.member_2_room, 1260, 263, 120, { size: 20 });
+  drawFittedText(context, team.school, 850, 310, 370, { size: 20 });
+  drawFittedText(context, team.province, 1255, 310, 135, { size: 20 });
+  drawFittedText(context, team.member_2_student_id, 930, 357, 235, { size: 19 });
+  drawFittedText(context, team.member_2_phone, 1250, 357, 140, { size: 19 });
 
   if (mode !== 'complete') return;
   const columns = [66, 153, 223, 321, 453, 574, 688, 804, 951, 1147, 1328, 1455];
@@ -492,7 +502,7 @@ function drawMasterCard(context, template, team, mode) {
     const y = 503 + index * 38.7;
     const values = [match.table, match.round, match.result, match.points, match.scoreFor, match.scoreAgainst, match.diff, match.accumulatedDiff, match.opponentName, match.opponentSchool, match.opponentCode, match.starter];
     const widths = [70, 64, 50, 115, 105, 105, 100, 105, 160, 198, 128, 88];
-    values.forEach((value, columnIndex) => drawFittedText(context, value, columns[columnIndex], y, widths[columnIndex], { align: 'center', size: columnIndex >= 8 ? 12 : 14, weight: columnIndex >= 8 ? 600 : 700 }));
+    values.forEach((value, columnIndex) => drawFittedText(context, value, columns[columnIndex], y, widths[columnIndex], { align: 'center', size: columnIndex >= 8 ? 16 : 18, weight: columnIndex >= 8 ? 400 : 700 }));
   });
 }
 
@@ -503,7 +513,7 @@ async function exportMasterCards(mode) {
   if (!window.PDFLib?.PDFDocument) { notify('เครื่องมือสร้าง PDF ยังโหลดไม่สำเร็จ กรุณารีเฟรชหน้า', 'error'); return; }
   notify(`กำลังสร้าง Master Score Card ${teams.length} หน้า…`);
   try {
-    await document.fonts?.ready;
+    await loadDocumentFonts();
     const template = await loadImage('/assets/master-score-card.png');
     const canvas = document.createElement('canvas');
     canvas.width = 1536;
@@ -514,8 +524,11 @@ async function exportMasterCards(mode) {
       drawMasterCard(context, template, team, mode);
       const blob = await canvasBlob(canvas);
       const image = await pdf.embedJpg(await blob.arrayBuffer());
-      const page = pdf.addPage([841.89, 595.28]);
-      page.drawImage(image, { x: 0, y: 0, width: 841.89, height: 595.28 });
+      const pageWidth = 841.89;
+      const pageHeight = 595.28;
+      const imageHeight = pageWidth * (canvas.height / canvas.width);
+      const page = pdf.addPage([pageWidth, pageHeight]);
+      page.drawImage(image, { x: 0, y: (pageHeight - imageHeight) / 2, width: pageWidth, height: imageHeight });
     }
     pdf.setTitle(`Master Score Card - ${state.data.tournament.name}`);
     pdf.setSubject('A-Math Master Score Card');

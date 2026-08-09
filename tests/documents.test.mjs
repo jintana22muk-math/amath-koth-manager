@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile, stat } from 'node:fs/promises';
 import { strToU8, zipSync } from 'fflate';
 import { parseDocxRegistration } from '../src/documents.js';
 
@@ -39,4 +40,17 @@ test('DOCX registration parser rejects documents without registration tables', (
   const xml = `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraph('ไม่มีตาราง')}</w:body></w:document>`;
   const docx = zipSync({ 'word/document.xml': strToU8(xml) });
   assert.throws(() => parseDocxRegistration(docx.buffer), /ไม่พบตาราง/);
+});
+
+test('document exports bundle and load TH Sarabun PSK faces', async () => {
+  const fontDirectory = new URL('../public/assets/fonts/', import.meta.url);
+  for (const file of ['THSarabunPSK-Regular.ttf', 'THSarabunPSK-Bold.ttf', 'THSarabunPSK-Italic.ttf', 'THSarabunPSK-BoldItalic.ttf']) {
+    assert.ok((await stat(new URL(file, fontDirectory))).size > 90_000);
+  }
+
+  const styles = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(styles, /font-family: "TH Sarabun PSK"/);
+  assert.match(app, /loadDocumentFonts/);
+  assert.match(app, /document\.fonts\.load\('700 24px "TH Sarabun PSK"'/);
 });
