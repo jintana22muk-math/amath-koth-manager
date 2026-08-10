@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRankings, makeKothPairings } from '../src/core.js';
+import { computeRankings, makeKothPairings, validateManualPairings } from '../src/core.js';
 
 test('standings apply per-round capped differential and win/draw/loss points', () => {
   const teams = [
@@ -37,6 +37,25 @@ test('odd entries produce exactly one BYE', () => {
   const result = makeKothPairings({ rankedTeams: teams, historyPairs: new Set(), byeCounts: new Map([['c', 1]]) });
   assert.equal(result.pairings.filter((x) => x.isBye).length, 1);
   assert.equal(result.pairings.length, 2);
+});
+
+test('manual pairings require every active team exactly once and the minimum BYE count', () => {
+  const teams = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  const pairings = validateManualPairings({ teams, matches: [
+    { team_a_id: 'a', team_b_id: 'b' },
+    { team_a_id: 'c', team_b_id: null }
+  ] });
+  assert.equal(pairings.length, 2);
+  assert.equal(pairings.filter((pair) => pair.isBye).length, 1);
+  assert.throws(() => validateManualPairings({ teams, matches: [
+    { team_a_id: 'a', team_b_id: 'b' },
+    { team_a_id: 'a', team_b_id: 'c' }
+  ] }), /เพียงหนึ่งโต๊ะ/);
+  assert.throws(() => validateManualPairings({ teams, matches: [
+    { team_a_id: 'a', team_b_id: null },
+    { team_a_id: 'b', team_b_id: null },
+    { team_a_id: 'c', team_b_id: null }
+  ] }), /พักการแข่งขัน/);
 });
 
 test('withdrawn teams with final matches remain in standings history', () => {
