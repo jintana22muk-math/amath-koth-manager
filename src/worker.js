@@ -7,7 +7,8 @@ import {
   normalizeScoring,
   parseJson,
   slugify,
-  toInt
+  toInt,
+  validateManualPairings
 } from './core.js';
 import { parseDocxRegistration } from './documents.js';
 import {
@@ -20,6 +21,10 @@ import {
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
+// The manager can run inside a cross-site iframe (for example, kru-ti.com).
+// CHIPS keeps that embedded session isolated to the top-level site instead of
+// relying on an unrestricted third-party cookie.
+const SESSION_COOKIE_ATTRIBUTES = 'Path=/; HttpOnly; Secure; SameSite=None; Partitioned';
 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), { status, headers: { ...JSON_HEADERS, ...headers } });
@@ -141,11 +146,11 @@ async function verifySession(request, env) {
 }
 
 function sessionCookie(token) {
-  return `session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
+  return `session=${token}; ${SESSION_COOKIE_ATTRIBUTES}; Max-Age=${SESSION_TTL_SECONDS}`;
 }
 
 function clearSessionCookie() {
-  return 'session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
+  return `session=; ${SESSION_COOKIE_ATTRIBUTES}; Max-Age=0`;
 }
 
 function asTournament(row) {
@@ -426,10 +431,30 @@ async function archiveTeam(env, tournamentId, teamId) {
     await audit(env, tournamentId, 'team.delete', { teamId });
     return json({ ok: true, mode: 'deleted' });
   }
-  if (finalCount === 0) return error('ทีมนี้อยู่ในคู่แข่งขันที่ยังรอผล กรุณาแก้คู่แข่งขันของรอบนั้นก่อน แล้วจึงลบทีมนี้', 409);
-  await env.DB.prepare('UPDATE teams SET is_active=0, updated_at=? WHERE id=? AND tournament_id=?').bind(now(), teamId, tournamentId).run();
-  await audit(env, tournamentId, 'team.withdraw', { teamId, matchCount, finalCount });
-  return json({ ok: true, mode: 'withdrawn' });
+  const pending = await env.DB.prepare(`SELECT m.*, r.id AS round_id
+    FROM matches m JOIN rounds r ON r.id=m.round_id
+    WHERE r.tournament_id=? AND m.status='pending' AND (m.team_a_id=? OR m.team_b_id=?)
+    ORDER BY r.created_at, m.table_no`).bind(tournamentId, teamId, teamId).all();
+  const affectedRoundIds = new Set();
+  const statements = [];
+  for (const match of pending.results) {
+    affectedRoundIds.add(match.round_id);
+    const opponentId = match.team_a_id === teamId ? match.team_b_id : match.team_a_id;
+    if (!opponentId) {
+      statements.push(env.DB.prepare('DELETE FROM matches WHERE id=?').bind(match.id));
+      continue;
+    }
+    statements.push(env.DB.prepare(`UPDATE matches SET team_a_id=?, team_b_id=NULL, score_a=0, score_b=0,
+      result_a='BYE', result_b='', winner_team_id=?, is_bye=1, status='final', updated_at=? WHERE id=?`)
+      .bind(opponentId, opponentId, now(), match.id));
+  }
+  if (finalCount === 0) statements.push(env.DB.prepare('DELETE FROM teams WHERE id=? AND tournament_id=?').bind(teamId, tournamentId));
+  else statements.push(env.DB.prepare('UPDATE teams SET is_active=0, updated_at=? WHERE id=? AND tournament_id=?').bind(now(), teamId, tournamentId));
+  if (statements.length) await env.DB.batch(statements);
+  for (const roundId of affectedRoundIds) await refreshRoundStatus(env, roundId);
+  const mode = finalCount === 0 ? 'deleted' : 'withdrawn';
+  await audit(env, tournamentId, mode === 'deleted' ? 'team.delete_with_pending' : 'team.withdraw', { teamId, matchCount, finalCount, adjustedPending: pending.results.length });
+  return json({ ok: true, mode, adjusted_pending: pending.results.length });
 }
 
 async function importTeams(request, env, tournamentId) {
@@ -581,24 +606,35 @@ async function generateKothRound(request, env, tournamentId) {
   const unfinished = kothRounds.find((round) => round.status !== 'completed');
   if (unfinished) return error(`ยังมี ${unfinished.title} ที่บันทึกผลไม่ครบ`);
   const roundNumber = kothRounds.length + 1;
-  const firstMethod = input.first_round_method || 'seed';
-  let rankedTeams;
-  if (!kothRounds.length) {
-    rankedTeams = firstMethod === 'random'
-      ? shuffle(activeTeams)
-      : [...activeTeams].sort((a, b) => a.seed - b.seed || a.name.localeCompare(b.name, 'th'));
+  const manualMatches = Array.isArray(input.matches) ? input.matches : null;
+  let firstMethod = input.first_round_method || 'seed';
+  let pairing;
+  if (manualMatches) {
+    try {
+      pairing = { pairings: validateManualPairings({ teams: activeTeams, matches: manualMatches }), warnings: [] };
+    } catch (cause) {
+      return error(cause.message);
+    }
+    firstMethod = 'manual';
   } else {
-    const rankMap = new Map(bundle.standings.map((row) => [row.team_id, row]));
-    rankedTeams = activeTeams.slice().sort((a, b) => rankMap.get(a.id).rank - rankMap.get(b.id).rank);
+    let rankedTeams;
+    if (!kothRounds.length) {
+      rankedTeams = firstMethod === 'random'
+        ? shuffle(activeTeams)
+        : [...activeTeams].sort((a, b) => a.seed - b.seed || a.name.localeCompare(b.name, 'th'));
+    } else {
+      const rankMap = new Map(bundle.standings.map((row) => [row.team_id, row]));
+      rankedTeams = activeTeams.slice().sort((a, b) => rankMap.get(a.id).rank - rankMap.get(b.id).rank);
+    }
+    const historyPairs = new Set(bundle.matches
+      .filter((match) => match.phase === 'koth' && match.status === 'final' && !match.is_bye && match.team_b_id)
+      .map((match) => [match.team_a_id, match.team_b_id].sort().join('|')));
+    const byeCounts = new Map();
+    for (const match of bundle.matches.filter((match) => match.phase === 'koth' && match.status === 'final' && match.is_bye)) {
+      byeCounts.set(match.team_a_id, (byeCounts.get(match.team_a_id) || 0) + 1);
+    }
+    pairing = makeKothPairings({ rankedTeams, historyPairs, byeCounts });
   }
-  const historyPairs = new Set(bundle.matches
-    .filter((match) => match.phase === 'koth' && match.status === 'final' && !match.is_bye && match.team_b_id)
-    .map((match) => [match.team_a_id, match.team_b_id].sort().join('|')));
-  const byeCounts = new Map();
-  for (const match of bundle.matches.filter((match) => match.phase === 'koth' && match.status === 'final' && match.is_bye)) {
-    byeCounts.set(match.team_a_id, (byeCounts.get(match.team_a_id) || 0) + 1);
-  }
-  const pairing = makeKothPairings({ rankedTeams, historyPairs, byeCounts });
   const diffCap = Math.max(0, toInt(input.diff_cap, tournament.scoring.round_caps[roundNumber - 1] ?? tournament.scoring.default_diff_cap));
   const roundId = id();
   const roundTitle = safeString(input.title, 100) || `เกมที่ ${roundNumber}`;
@@ -625,13 +661,23 @@ async function replaceRoundMatches(request, env, tournamentId, roundId) {
   await ensureTournament(env, tournamentId);
   const round = await env.DB.prepare('SELECT * FROM rounds WHERE id=? AND tournament_id=?').bind(roundId, tournamentId).first();
   if (!round) return error('ไม่พบรอบแข่งขัน', 404);
+  if (round.phase === 'koth') {
+    const newer = await env.DB.prepare("SELECT id FROM rounds WHERE tournament_id=? AND phase='koth' AND round_number>? LIMIT 1").bind(tournamentId, round.round_number).first();
+    if (newer) return error('แก้คู่รอบก่อนหน้าไม่ได้ เพราะสร้างเกมถัดไปแล้ว', 409);
+  }
   const old = await env.DB.prepare('SELECT * FROM matches WHERE round_id=?').bind(roundId).all();
   const existing = old.results.sort((a, b) => toInt(a.table_no) - toInt(b.table_no));
   const hasFinalMatch = existing.some((match) => match.status === 'final' && Number(match.is_bye) !== 1);
   const input = await bodyJson(request);
   const list = Array.isArray(input.matches) ? input.matches : [];
   if (!list.length) return error('ต้องมีอย่างน้อย 1 คู่แข่งขัน');
-  if (hasFinalMatch && list.length !== existing.length) return error('รอบนี้มีผลที่ยืนยันแล้ว จึงเพิ่มหรือลดจำนวนโต๊ะไม่ได้');
+  for (let index = 0; index < existing.length; index += 1) {
+    const prior = existing[index];
+    if (prior.status === 'final' && Number(prior.is_bye) !== 1) {
+      const item = list[index];
+      if (!item || item.team_a_id !== prior.team_a_id || (item.team_b_id || null) !== (prior.team_b_id || null)) return error(`โต๊ะ ${prior.table_no} ยืนยันผลแล้ว จึงเปลี่ยนหรือลบคู่ไม่ได้`);
+    }
+  }
   const active = await env.DB.prepare('SELECT id FROM teams WHERE tournament_id=? AND is_active=1').bind(tournamentId).all();
   const lockedTeamIds = existing
     .filter((match) => match.status === 'final' && Number(match.is_bye) !== 1)
@@ -640,10 +686,6 @@ async function replaceRoundMatches(request, env, tournamentId, roundId) {
   const seen = new Set();
   for (let index = 0; index < list.length; index += 1) {
     const item = list[index];
-    const prior = existing[index];
-    if (prior?.status === 'final' && Number(prior.is_bye) !== 1) {
-      if (item.team_a_id !== prior.team_a_id || (item.team_b_id || null) !== (prior.team_b_id || null)) return error(`โต๊ะ ${prior.table_no} ยืนยันผลแล้ว จึงเปลี่ยนคู่ไม่ได้`);
-    }
     if (!allowed.has(item.team_a_id)) return error('มีทีมที่ไม่อยู่ในรายการแข่งขัน');
     if (seen.has(item.team_a_id)) return error('ห้ามใช้ทีมซ้ำในรอบเดียวกัน');
     seen.add(item.team_a_id);
@@ -653,15 +695,16 @@ async function replaceRoundMatches(request, env, tournamentId, roundId) {
     }
   }
   if (hasFinalMatch) {
-    const statements = [];
+    const statements = [env.DB.prepare("DELETE FROM matches WHERE round_id=? AND NOT (status='final' AND is_bye=0)").bind(roundId)];
     list.forEach((item, index) => {
       const prior = existing[index];
-      if (!prior || (prior.status === 'final' && Number(prior.is_bye) !== 1)) return;
+      if (prior?.status === 'final' && Number(prior.is_bye) !== 1) return;
       const bye = !item.team_b_id;
-      statements.push(env.DB.prepare(`UPDATE matches SET team_a_id=?, team_b_id=?, score_a=?, score_b=?, result_a=?, result_b=?, winner_team_id=?, is_bye=?, status=?, updated_at=? WHERE id=?`)
-        .bind(item.team_a_id, item.team_b_id || null, bye ? 0 : null, bye ? 0 : null, bye ? 'BYE' : '', '', bye ? item.team_a_id : null, bye ? 1 : 0, bye ? 'final' : 'pending', now(), prior.id));
+      statements.push(env.DB.prepare(`INSERT INTO matches (id, round_id, table_no, team_a_id, team_b_id, score_a, score_b, result_a, result_b, winner_team_id, is_bye, status, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(id(), roundId, index + 1, item.team_a_id, item.team_b_id || null, bye ? 0 : null, bye ? 0 : null, bye ? 'BYE' : '', '', bye ? item.team_a_id : null, bye ? 1 : 0, bye ? 'final' : 'pending', now()));
     });
-    if (statements.length) await env.DB.batch(statements);
+    await env.DB.batch(statements);
     await refreshRoundStatus(env, roundId);
     await audit(env, tournamentId, 'round.pairing.partial_update', { roundId, matchCount: list.length });
     return json({ ok: true, bundle: await getBundle(env, tournamentId) });

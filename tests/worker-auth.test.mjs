@@ -82,7 +82,12 @@ test('environment administrator can add an account and deletion invalidates its 
   const env = { DB: new MemoryDatabase(), ASSETS: { fetch: () => new Response('asset') }, AUTH_SECRET: 'test-auth-secret', ADMIN_PASSWORD: 'main-admin-password' };
   const loginResponse = await worker.fetch(apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: 'admin', password: 'main-admin-password' }) }), env);
   assert.equal(loginResponse.status, 200);
-  const mainCookie = loginResponse.headers.get('set-cookie').split(';')[0];
+  const loginCookieHeader = loginResponse.headers.get('set-cookie');
+  assert.match(loginCookieHeader, /; HttpOnly;/);
+  assert.match(loginCookieHeader, /; Secure;/);
+  assert.match(loginCookieHeader, /; SameSite=None;/);
+  assert.match(loginCookieHeader, /; Partitioned;/);
+  const mainCookie = loginCookieHeader.split(';')[0];
 
   const createResponse = await worker.fetch(apiRequest('/api/admins', {
     method: 'POST',
@@ -105,3 +110,14 @@ test('environment administrator can add an account and deletion invalidates its 
   assert.equal((await sessionAfterDelete.json()).authenticated, false);
 });
 
+test('logout clears the partitioned iframe session cookie', async () => {
+  const env = { DB: new MemoryDatabase(), ASSETS: { fetch: () => new Response('asset') }, AUTH_SECRET: 'test-auth-secret', ADMIN_PASSWORD: 'main-admin-password' };
+  const response = await worker.fetch(apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) }), env);
+  const cookie = response.headers.get('set-cookie');
+
+  assert.equal(response.status, 200);
+  assert.match(cookie, /^session=;/);
+  assert.match(cookie, /; SameSite=None;/);
+  assert.match(cookie, /; Partitioned;/);
+  assert.match(cookie, /; Max-Age=0$/);
+});

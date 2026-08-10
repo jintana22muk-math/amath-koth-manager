@@ -251,7 +251,7 @@ function kothControls(data) {
   const cap = data.tournament.scoring.round_caps[nextNo - 1] ?? data.tournament.scoring.default_diff_cap;
   const teamCount = data.teams.filter((team) => team.is_active).length;
   const pendingCount = incomplete?.matches.filter((match) => !match.is_bye && match.status !== 'final').length || 0;
-  return `<section class="round-control ${incomplete ? 'has-active' : ''}"><div class="round-control-copy"><span class="section-kicker">${incomplete ? 'รอบที่กำลังแข่งขัน' : 'พร้อมสำหรับขั้นตอนถัดไป'}</span><h3>${incomplete ? escapeHtml(incomplete.title) : `สร้างคู่เกมที่ ${nextNo}`}</h3><p>${incomplete ? `ยังเหลือ ${pendingCount} คู่ที่ต้องบันทึกผล เมื่อครบแล้วจึงสร้างเกมถัดไปได้` : 'ระบบจะประกบทีมอันดับใกล้กันและพยายามหลีกเลี่ยงคู่ที่เคยพบกัน'}</p></div>${incomplete ? `<div class="round-progress"><strong>${incomplete.matches.length - pendingCount}/${incomplete.matches.length}</strong><span>คู่บันทึกแล้ว</span></div>` : `<form data-form="generate-round" class="round-create-form"><div class="field"><label>การจับคู่${nextNo > 1 ? '' : 'เกมแรก'}</label><select name="first_round_method" ${nextNo > 1 ? 'disabled' : ''}><option value="seed">ตามลำดับเริ่มต้น (Seed)</option><option value="random">สุ่มลำดับ</option></select></div><div class="field"><label>เพดานผลต่าง</label><input type="number" min="0" name="diff_cap" value="${cap}" /></div><div class="field"><label>ชื่อเกม (ไม่จำเป็น)</label><input name="title" placeholder="เกมที่ ${nextNo}" /></div><button class="button primary" type="submit" ${teamCount < 2 ? 'disabled' : ''}>สร้างคู่เกมที่ ${nextNo}</button><small>${teamCount < 2 ? 'ต้องมีอย่างน้อย 2 ทีม' : `${teamCount} ทีม${teamCount % 2 ? ' · พักการแข่งขัน (BYE) 1 ทีม' : ''}`}</small></form>`}</section>`;
+  return `<section class="round-control ${incomplete ? 'has-active' : ''}"><div class="round-control-copy"><span class="section-kicker">${incomplete ? 'รอบที่กำลังแข่งขัน' : 'พร้อมสำหรับขั้นตอนถัดไป'}</span><h3>${incomplete ? escapeHtml(incomplete.title) : `สร้างคู่เกมที่ ${nextNo}`}</h3><p>${incomplete ? `ยังเหลือ ${pendingCount} คู่ที่ต้องบันทึกผล เมื่อครบแล้วจึงสร้างเกมถัดไปได้` : 'ให้ระบบแนะนำคู่ก่อน หรือจัดทุกคู่ด้วยตัวเองตามสถานการณ์หน้างาน'}</p></div>${incomplete ? `<div class="round-progress"><strong>${incomplete.matches.length - pendingCount}/${incomplete.matches.length}</strong><span>คู่บันทึกแล้ว</span></div>` : `<form data-form="generate-round" class="round-create-form"><div class="field"><label>การจับคู่${nextNo > 1 ? '' : 'เกมแรก'}</label><select name="first_round_method" ${nextNo > 1 ? 'disabled' : ''}><option value="seed">ตามลำดับเริ่มต้น (Seed)</option><option value="random">สุ่มลำดับ</option></select></div><div class="field"><label>เพดานผลต่าง</label><input type="number" min="0" name="diff_cap" value="${cap}" /></div><div class="field"><label>ชื่อเกม (ไม่จำเป็น)</label><input name="title" placeholder="เกมที่ ${nextNo}" /></div><div class="round-create-actions"><button class="button primary" type="submit" ${teamCount < 2 ? 'disabled' : ''}>ให้ระบบจับคู่</button><button class="button secondary" type="button" data-action="start-manual-pairing" data-round-number="${nextNo}" data-diff-cap="${cap}" ${teamCount < 2 ? 'disabled' : ''}>จับคู่ด้วยตัวเอง</button></div><small>${teamCount < 2 ? 'ต้องมีอย่างน้อย 2 ทีม' : `${teamCount} ทีม${teamCount % 2 ? ' · พักการแข่งขัน (BYE) 1 ทีม' : ''} · แก้ไขคู่ได้ก่อนยืนยันผล`}</small></form>`}</section>`;
 }
 
 function renderMatchRow(match, round) {
@@ -264,8 +264,12 @@ function renderMatchRow(match, round) {
 
 function renderRounds(data) {
   const allRounds = data.rounds;
-  if (!allRounds.length) return `<section class="card empty"><div class="empty-icon">↔</div><h3>ยังไม่มีการจับคู่</h3><p>เมื่อพร้อมแล้วให้สร้างเกมคิงออฟเดอะฮิลล์ (KOTH) แรก ระบบจะเรียงตามลำดับเริ่มต้น (Seed) หรือสุ่มตามที่เลือก</p></section>`;
-  return allRounds.slice().reverse().map((round, index) => `<section class="card round-card ${index === 0 ? 'latest-round' : ''}"><header class="round-title"><div><span class="section-kicker">${index === 0 ? 'ล่าสุด' : 'รอบก่อนหน้า'}</span><h4>${escapeHtml(round.title)}</h4><p>${round.phase === 'koth' ? `เกมคิงออฟเดอะฮิลล์ (KOTH) ${round.round_number} · เพดานผลต่าง ±${round.diff_cap}` : round.phase === 'finals-semifinal' ? '4 อันดับแรก (Top 4) · อันดับ 1 พบ 4 และอันดับ 2 พบ 3' : 'รอบชิงชนะเลิศและชิงอันดับ 3'}</p>${round.pairing_note ? `<p class="notice warning" style="margin:8px 0 0">${escapeHtml(round.pairing_note)}</p>` : ''}</div><div class="button-row"><button class="button secondary small" data-action="export-pairing-sheet" data-id="${escapeHtml(round.id)}">พิมพ์ใบจับคู่เกมนี้</button>${round.status !== 'completed' ? `<button class="button primary small" data-action="submit-round-results" data-id="${escapeHtml(round.id)}">ยืนยันผลทั้งหมด</button>` : ''}${badge(round.status)}${round.status !== 'completed' ? `<button class="button ghost small" data-action="edit-pairings" data-id="${escapeHtml(round.id)}">แก้ไขคู่</button>` : ''}</div></header><div class="match-list">${round.matches.map((match) => renderMatchRow(match, round)).join('')}</div></section>`).join('');
+  if (!allRounds.length) return `<section class="card empty"><div class="empty-icon">↔</div><h3>ยังไม่มีการจับคู่</h3><p>สร้างเกมแรกโดยให้ระบบแนะนำคู่ หรือกด “จับคู่ด้วยตัวเอง” เพื่อกำหนดทุกโต๊ะเอง</p></section>`;
+  const latestKothId = allRounds.filter((round) => round.phase === 'koth').at(-1)?.id;
+  return allRounds.slice().reverse().map((round, index) => {
+    const canEditPairings = round.status !== 'completed' || (round.id === latestKothId && !round.matches.some((match) => match.status === 'final' && !match.is_bye));
+    return `<section class="card round-card ${index === 0 ? 'latest-round' : ''}"><header class="round-title"><div><span class="section-kicker">${index === 0 ? 'ล่าสุด' : 'รอบก่อนหน้า'}</span><h4>${escapeHtml(round.title)}</h4><p>${round.phase === 'koth' ? `เกมคิงออฟเดอะฮิลล์ (KOTH) ${round.round_number} · เพดานผลต่าง ±${round.diff_cap}` : round.phase === 'finals-semifinal' ? '4 อันดับแรก (Top 4) · อันดับ 1 พบ 4 และอันดับ 2 พบ 3' : 'รอบชิงชนะเลิศและชิงอันดับ 3'}</p>${round.pairing_note ? `<p class="notice warning" style="margin:8px 0 0">${escapeHtml(round.pairing_note)}</p>` : ''}</div><div class="button-row"><button class="button secondary small" data-action="export-pairing-sheet" data-id="${escapeHtml(round.id)}">พิมพ์ใบจับคู่เกมนี้</button>${round.status !== 'completed' ? `<button class="button primary small" data-action="submit-round-results" data-id="${escapeHtml(round.id)}">ยืนยันผลทั้งหมด</button>` : ''}${badge(round.status)}${canEditPairings ? `<button class="button ghost small" data-action="edit-pairings" data-id="${escapeHtml(round.id)}">แก้คู่ด้วยตัวเอง</button>` : ''}</div></header><div class="match-list">${round.matches.map((match) => renderMatchRow(match, round)).join('')}</div></section>`;
+  }).join('');
 }
 
 function finalControls(data) {
@@ -390,13 +394,65 @@ function deleteTournamentModal(tournament) {
   render();
 }
 
+function pairingOptionList(teams, selected, side) {
+  const blank = side === 'a'
+    ? '<option value="">เลือกทีม</option>'
+    : '<option value="">พักการแข่งขัน (BYE) — ไม่มีคู่แข่งขัน</option>';
+  return `${blank}${teams.map((team) => `<option value="${escapeHtml(team.id)}" ${team.id === selected ? 'selected' : ''}>${escapeHtml(team.code)} — ${escapeHtml(team.name)}</option>`).join('')}`;
+}
+
+function pairingEditRow(teams, match = {}, index = 0, locked = false, canRemove = true) {
+  const rowAction = locked ? '<span class="pair-lock">ล็อกผลแล้ว</span>' : canRemove ? '<button class="button ghost small pair-remove" type="button" data-action="remove-pair-row" aria-label="ลบโต๊ะนี้">ลบโต๊ะ</button>' : '<span></span>';
+  return `<div class="pair-edit-row" data-pair-row><strong>โต๊ะ ${index + 1}</strong><select data-pair-side="a" aria-label="ทีม A โต๊ะ ${index + 1}" ${locked ? 'disabled' : ''}>${pairingOptionList(teams, match.team_a_id, 'a')}</select><span>พบ</span><select data-pair-side="b" aria-label="ทีม B โต๊ะ ${index + 1}" ${locked ? 'disabled' : ''}>${pairingOptionList(teams, match.team_b_id, 'b')}</select>${rowAction}</div>`;
+}
+
+function activePairingTeams() {
+  return (state.data?.teams || []).filter((team) => team.is_active).sort((a, b) => a.seed - b.seed || a.name.localeCompare(b.name, 'th'));
+}
+
+function pairingRoster(teams, roundId = '') {
+  const matches = state.data?.matches || [];
+  const finalTeamIds = new Set(matches.filter((match) => match.status === 'final' && !match.is_bye).flatMap((match) => [match.team_a_id, match.team_b_id].filter(Boolean)));
+  const matchedTeamIds = new Set(matches.filter((match) => match.status !== 'final' || match.is_bye).flatMap((match) => [match.team_a_id, match.team_b_id].filter(Boolean)));
+  return `<details class="pairing-roster" ${teams.length <= 12 ? 'open' : ''}><summary>ทีมที่มาแข่งขัน (${teams.length}) · เพิ่ม แก้ไข หรือลบทีมหน้างาน</summary><div class="pairing-roster-list">${teams.map((team) => `<div><span><strong>${escapeHtml(team.code)}</strong> ${escapeHtml(team.name)}</span><button class="button danger-outline small" type="button" data-action="delete-team" data-id="${escapeHtml(team.id)}" data-return-round-id="${escapeHtml(roundId)}" data-delete-mode="${finalTeamIds.has(team.id) ? 'withdraw' : matchedTeamIds.has(team.id) ? 'paired' : 'delete'}">${finalTeamIds.has(team.id) ? 'ถอนทีม' : 'ลบทีม'}</button></div>`).join('')}</div><button class="button secondary small" type="button" data-action="go-teams">เพิ่มหรือแก้ไขข้อมูลทีม</button></details>`;
+}
+
+function manualPairingModal(roundNumber, diffCap) {
+  const teams = activePairingTeams();
+  if (teams.length < 2) return;
+  const rows = [];
+  for (let index = 0; index < teams.length; index += 2) rows.push({ team_a_id: teams[index].id, team_b_id: teams[index + 1]?.id || null });
+  state.modal = {
+    title: `จับคู่ด้วยตัวเอง · เกมที่ ${roundNumber}`,
+    body: `<p class="notice info">กำหนดคู่ทุกโต๊ะได้เอง ทีมหนึ่งเลือกได้ครั้งเดียว หากจำนวนทีมเป็นคี่ให้เลือก “พักการแข่งขัน (BYE)” เพียงหนึ่งโต๊ะ</p><form data-form="create-manual-round" data-active-team-count="${teams.length}"><div class="form-grid manual-round-fields"><div class="field"><label>ชื่อเกม (ไม่จำเป็น)</label><input name="title" placeholder="เกมที่ ${roundNumber}" /></div><div class="field"><label>เพดานผลต่าง</label><input type="number" min="0" name="diff_cap" value="${escapeHtml(diffCap)}" /></div></div>${pairingRoster(teams)}<div class="pair-editor">${rows.map((match, index) => pairingEditRow(teams, match, index)).join('')}</div><template data-pair-template>${pairingEditRow(teams)}</template><div class="pair-editor-actions"><button class="button secondary small" type="button" data-action="add-pair-row">เพิ่มโต๊ะ</button></div><div class="button-row" style="margin-top:18px"><button class="button primary" type="submit">บันทึกและเปิดเกมนี้</button><button class="button ghost" data-action="close-modal" type="button">ยกเลิก</button></div></form>`
+  };
+  render();
+}
+
 function pairingModal(roundId) {
   const round = state.data?.rounds.find((item) => item.id === roundId);
   if (!round) return;
-  const teams = state.data.teams.filter((team) => team.is_active).sort((a, b) => a.seed - b.seed || a.name.localeCompare(b.name, 'th'));
-  const optionList = (selected, blank = false) => `${blank ? '<option value="">พักการแข่งขัน (BYE) — ไม่มีคู่แข่งขัน</option>' : ''}${teams.map((team) => `<option value="${escapeHtml(team.id)}" ${team.id === selected ? 'selected' : ''}>${escapeHtml(team.code)} — ${escapeHtml(team.name)}</option>`).join('')}`;
-  state.modal = { title: `แก้ไขคู่ · ${round.title}`, body: `<p class="notice info">คู่ที่ยังไม่ยืนยันผลสามารถแก้ไขได้ทันที ส่วนโต๊ะที่ยืนยันผลแล้วจะถูกล็อกไว้เพื่อรักษาประวัติ ทีมหนึ่งใช้ได้เพียงครั้งเดียวในรอบเดียวกัน และพักการแข่งขัน (BYE) ใช้ได้ 1 ทีมเมื่อมีจำนวนทีมเป็นคี่</p><form data-form="save-pairings" data-round-id="${escapeHtml(round.id)}"><div class="pair-editor">${round.matches.map((match, index) => `<div class="pair-edit-row"><strong>โต๊ะ ${index + 1}</strong><select name="a_${index}" ${match.status === 'final' && !match.is_bye ? 'disabled' : ''}>${optionList(match.team_a_id)}</select><span>พบ</span><select name="b_${index}" ${match.status === 'final' && !match.is_bye ? 'disabled' : ''}>${optionList(match.team_b_id, true)}</select>${match.status === 'final' && !match.is_bye ? `<input type="hidden" name="a_${index}" value="${escapeHtml(match.team_a_id)}" /><input type="hidden" name="b_${index}" value="${escapeHtml(match.team_b_id || '')}" />` : ''}</div>`).join('')}</div><input type="hidden" name="count" value="${round.matches.length}" /><div class="button-row" style="margin-top:18px"><button class="button primary" type="submit">บันทึกคู่แข่งขัน</button><button class="button ghost" data-action="close-modal" type="button">ยกเลิก</button></div></form>` };
+  const activeTeams = activePairingTeams();
+  const lockedTeams = round.matches.filter((match) => match.status === 'final' && !match.is_bye).flatMap((match) => [match.team_a, match.team_b]).filter(Boolean);
+  const teams = [...new Map([...activeTeams, ...lockedTeams].map((team) => [team.id, team])).values()];
+  const hasLockedMatches = round.matches.some((match) => match.status === 'final' && !match.is_bye);
+  const canRemove = !hasLockedMatches;
+  const targetRows = Math.max(round.matches.length, Math.ceil(activeTeams.length / 2));
+  const rows = Array.from({ length: targetRows }, (_, index) => round.matches[index] || {});
+  state.modal = { title: `แก้ไขคู่ด้วยตัวเอง · ${round.title}`, body: `<p class="notice info">คู่ที่ยังไม่ยืนยันผลแก้ไขได้ทันที รวมถึงเพิ่มหรือลดโต๊ะเมื่อมีทีมมาเพิ่มหรือถอนตัว คู่ที่ยืนยันผลแล้วจะถูกล็อกไว้เพื่อรักษาประวัติ</p><form data-form="save-pairings" data-round-id="${escapeHtml(round.id)}">${pairingRoster(activeTeams, round.id)}<div class="pair-editor">${rows.map((match, index) => pairingEditRow(teams, match, index, match.status === 'final' && !match.is_bye, canRemove)).join('')}</div><template data-pair-template>${pairingEditRow(teams, {}, 0, false, canRemove)}</template><div class="pair-editor-actions"><button class="button secondary small" type="button" data-action="add-pair-row">เพิ่มโต๊ะ</button></div><div class="button-row" style="margin-top:18px"><button class="button primary" type="submit">บันทึกคู่แข่งขัน</button><button class="button ghost" data-action="close-modal" type="button">ยกเลิก</button></div></form>` };
   render();
+}
+
+function collectPairings(form) {
+  const matches = [...form.querySelectorAll('[data-pair-row]')].map((row) => ({
+    team_a_id: row.querySelector('[data-pair-side="a"]')?.value || '',
+    team_b_id: row.querySelector('[data-pair-side="b"]')?.value || null
+  }));
+  if (!matches.length) throw new Error('ต้องมีอย่างน้อย 1 โต๊ะแข่งขัน');
+  if (matches.some((match) => !match.team_a_id)) throw new Error('กรุณาเลือกทีม A ให้ครบทุกโต๊ะ หรือลบโต๊ะที่ไม่ใช้');
+  const ids = matches.flatMap((match) => [match.team_a_id, match.team_b_id].filter(Boolean));
+  if (new Set(ids).size !== ids.length) throw new Error('ทีมหนึ่งลงแข่งขันได้เพียงหนึ่งโต๊ะในเกมเดียวกัน');
+  return matches;
 }
 
 function openDocxImport() {
@@ -712,7 +768,7 @@ async function handleAction(event) {
     return;
   }
   if (action === 'go-tournaments') { state.view = 'tournaments'; render(); return; }
-  if (action === 'go-teams') { state.view = 'teams'; render(); return; }
+  if (action === 'go-teams') { state.modal = null; state.view = 'teams'; render(); return; }
   if (action === 'go-koth') { state.view = 'koth'; render(); return; }
   if (action === 'go-standings') { state.view = 'standings'; render(); return; }
   if (action === 'new-tournament') { tournamentModal(); return; }
@@ -734,6 +790,28 @@ async function handleAction(event) {
   if (action === 'import-docx') { openDocxImport(); return; }
   if (action === 'export-master-card') { await exportMasterCards(button.dataset.mode || 'blank'); return; }
   if (action === 'export-pairing-sheet') { await exportPairingSheet(button.dataset.id); return; }
+  if (action === 'start-manual-pairing') { manualPairingModal(Number(button.dataset.roundNumber), Number(button.dataset.diffCap)); return; }
+  if (action === 'add-pair-row') {
+    const form = button.closest('form');
+    const editor = form?.querySelector('.pair-editor');
+    const template = form?.querySelector('template[data-pair-template]');
+    if (!editor || !template) return;
+    editor.append(template.content.cloneNode(true));
+    [...editor.querySelectorAll('[data-pair-row]')].forEach((row, index) => {
+      row.querySelector('strong').textContent = `โต๊ะ ${index + 1}`;
+      row.querySelector('[data-pair-side="a"]').setAttribute('aria-label', `ทีม A โต๊ะ ${index + 1}`);
+      row.querySelector('[data-pair-side="b"]').setAttribute('aria-label', `ทีม B โต๊ะ ${index + 1}`);
+    });
+    return;
+  }
+  if (action === 'remove-pair-row') {
+    const editor = button.closest('.pair-editor');
+    const rows = [...(editor?.querySelectorAll('[data-pair-row]') || [])];
+    if (rows.length <= 1) { notify('ต้องเหลืออย่างน้อย 1 โต๊ะแข่งขัน', 'error'); return; }
+    button.closest('[data-pair-row]')?.remove();
+    [...editor.querySelectorAll('[data-pair-row]')].forEach((row, index) => { row.querySelector('strong').textContent = `โต๊ะ ${index + 1}`; });
+    return;
+  }
   if (action === 'submit-round-results') {
     const card = button.closest('.round-card');
     const forms = [...(card?.querySelectorAll('form[data-form="match"]') || [])];
@@ -767,13 +845,17 @@ async function handleAction(event) {
     const message = mode === 'withdraw'
       ? `ต้องการถอนทีม “${team?.name || ''}” ออกจากการจับคู่รอบถัดไปใช่หรือไม่? ระบบจะเก็บประวัติผลเดิมไว้`
       : mode === 'paired'
-        ? `ทีม “${team?.name || ''}” อยู่ในคู่แข่งขันที่ยังรอผลอยู่ ต้องการลองลบใช่หรือไม่? หากลบไม่ได้ให้ไปแก้คู่แข่งขันของรอบนั้นก่อน`
+        ? `ทีม “${team?.name || ''}” อยู่ในคู่ที่ยังรอผล ต้องการลบออกจากรายการใช่หรือไม่? ระบบจะเอาทีมออกจากคู่ปัจจุบัน แล้วเปิดให้คุณจัดคู่ที่เหลือใหม่`
         : `ต้องการลบทีม “${team?.name || ''}” ออกจากรายการถาวรใช่หรือไม่?`;
     if (!team || !confirm(message)) return;
     try {
       const result = await api(`/api/tournaments/${state.selectedId}/teams/${team.id}`, { method: 'DELETE' });
+      const returnRoundId = button.dataset.returnRoundId;
+      state.modal = null;
       await refreshAll();
-      notify(result.mode === 'withdrawn' ? 'ถอนทีมแล้ว และยังเก็บประวัติผลเดิมไว้' : 'ลบทีมออกจากรายการถาวรแล้ว', 'success');
+      if (returnRoundId && state.data?.rounds.some((round) => round.id === returnRoundId)) pairingModal(returnRoundId);
+      const adjusted = result.adjusted_pending ? ` และปรับคู่รอผล ${result.adjusted_pending} โต๊ะแล้ว` : '';
+      notify(`${result.mode === 'withdrawn' ? 'ถอนทีมแล้ว โดยเก็บประวัติผลเดิมไว้' : 'ลบทีมออกจากรายการแล้ว'}${adjusted}`, 'success');
     } catch (error) { notify(error.message, 'error'); }
     return;
   }
@@ -887,13 +969,20 @@ async function handleSubmit(event) {
       await api(`/api/tournaments/${state.selectedId}/rounds`, { method: 'POST', body: JSON.stringify(values) });
       await loadTournament(); render(); notify('สร้างคู่แข่งขันเรียบร้อย', 'success'); return;
     }
+    if (kind === 'create-manual-round') {
+      const matches = collectPairings(form);
+      const activeTeamCount = Number(form.dataset.activeTeamCount || 0);
+      const usedCount = matches.reduce((count, match) => count + 1 + (match.team_b_id ? 1 : 0), 0);
+      if (usedCount !== activeTeamCount) throw new Error(`กรุณาจับคู่ทีมที่มาแข่งขันให้ครบ ${activeTeamCount} ทีม`);
+      await api(`/api/tournaments/${state.selectedId}/rounds`, { method: 'POST', body: JSON.stringify({ title: values.title, diff_cap: values.diff_cap, matches }) });
+      state.modal = null; await loadTournament(); render(); notify('บันทึกคู่ที่จัดด้วยตัวเองแล้ว', 'success'); return;
+    }
     if (kind === 'match') {
       await api(`/api/matches/${form.dataset.matchId}`, { method: 'PATCH', body: JSON.stringify({ ...values, status: 'final' }) });
       await loadTournament(); render(); notify('บันทึกผลการแข่งขันแล้ว', 'success'); return;
     }
     if (kind === 'save-pairings') {
-      const count = Number(values.count || 0);
-      const matches = Array.from({ length: count }, (_, index) => ({ team_a_id: values[`a_${index}`], team_b_id: values[`b_${index}`] || null }));
+      const matches = collectPairings(form);
       await api(`/api/tournaments/${state.selectedId}/rounds/${form.dataset.roundId}/matches`, { method: 'PUT', body: JSON.stringify({ matches }) });
       state.modal = null; await loadTournament(); render(); notify('บันทึกคู่แข่งขันแล้ว', 'success'); return;
     }

@@ -204,6 +204,27 @@ export function makeKothPairings({ rankedTeams = [], historyPairs = new Set(), b
   return { pairings, bye, warnings };
 }
 
+export function validateManualPairings({ teams = [], matches = [] }) {
+  if (!matches.length) throw new Error('ต้องมีอย่างน้อย 1 คู่แข่งขัน');
+  const teamMap = new Map(teams.map((team) => [team.id, team]));
+  const seen = new Set();
+  let byeCount = 0;
+  const pairings = matches.map((match) => {
+    const teamA = teamMap.get(match.team_a_id);
+    const teamB = match.team_b_id ? teamMap.get(match.team_b_id) : null;
+    if (!teamA || (match.team_b_id && !teamB)) throw new Error('มีทีมที่ไม่อยู่ในรายชื่อทีมที่มาแข่งขัน');
+    if (seen.has(teamA.id) || (teamB && (teamB.id === teamA.id || seen.has(teamB.id)))) throw new Error('ทีมหนึ่งลงแข่งขันได้เพียงหนึ่งโต๊ะในเกมเดียวกัน');
+    seen.add(teamA.id);
+    if (teamB) seen.add(teamB.id);
+    else byeCount += 1;
+    return { teamA, teamB, isBye: !teamB };
+  });
+  if (seen.size !== teams.length) throw new Error(`กรุณาจับคู่ทีมที่มาแข่งขันให้ครบ ${teams.length} ทีม`);
+  const expectedByes = teams.length % 2;
+  if (byeCount !== expectedByes) throw new Error(expectedByes ? 'ทีมเป็นจำนวนคี่ จึงต้องมีพักการแข่งขัน (BYE) 1 ทีม' : 'ทีมเป็นจำนวนคู่ จึงไม่ควรมีทีมพักการแข่งขัน (BYE)');
+  return pairings;
+}
+
 export function slugify(value) {
   const cleaned = String(value || '')
     .trim()

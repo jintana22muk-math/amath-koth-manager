@@ -496,7 +496,18 @@ button.action-card { width: 100%; font: inherit; }
 .delete-warning p { margin: 4px 0 0; color: #885267; font-size: 11px; line-height: 1.6; }
 .delete-confirm-actions { padding-top: 2px; }
 .pair-editor { display: grid; gap: 9px; }
-.pair-edit-row { display: grid; grid-template-columns: 58px minmax(0,1fr) 32px minmax(0,1fr); gap: 8px; align-items: center; }
+.pair-edit-row { display: grid; grid-template-columns: 58px minmax(0,1fr) 32px minmax(0,1fr) auto; gap: 8px; align-items: center; }
+.pair-remove { white-space: nowrap; }
+.pair-lock { color: var(--muted); font-size: 10px; white-space: nowrap; }
+.pair-editor-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.round-create-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.round-create-actions .button { flex: 1 1 150px; }
+.manual-round-fields { margin-bottom: 14px; }
+.pairing-roster { margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fffafd; }
+.pairing-roster summary { cursor: pointer; color: var(--ink); font-weight: 700; }
+.pairing-roster-list { display: grid; max-height: 320px; gap: 7px; margin: 12px 0; overflow: auto; }
+.pairing-roster-list > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 7px; border-bottom: 1px solid var(--line); }
+.pairing-roster-list > div:last-child { border-bottom: 0; }
 .toast-stack { position: fixed; right: 18px; bottom: 18px; z-index: 70; display: grid; gap: 8px; width: min(360px, calc(100vw - 36px)); }
 .toast { padding: 12px 14px; border-left: 4px solid var(--lime); color: #fff; background: var(--dark); box-shadow: var(--shadow); font-size: 12px; animation: toast-in .2s ease-out; }
 .toast.error { border-color: #ff8a78; }
@@ -643,9 +654,10 @@ td { font-size: 14px; }
   .settings-section header h3 { font-size: 20px; }
   .settings-save { align-items: stretch; flex-direction: column; }
   .settings-save .button { width: 100%; }
-  .pair-edit-row { grid-template-columns: 48px minmax(0,1fr); }
-  .pair-edit-row > span { display: none; }
-  .pair-edit-row select:last-child { grid-column: 2; }
+  .pair-edit-row { grid-template-columns: 48px minmax(0,1fr) auto; }
+  .pair-edit-row > span:not(.pair-lock) { display: none; }
+  .pair-edit-row select[data-pair-side="b"] { grid-column: 2; }
+  .pair-edit-row .pair-remove, .pair-edit-row .pair-lock { grid-column: 3; grid-row: 1 / span 2; }
   .modal-backdrop { padding: 8px; place-items: stretch; }
   .modal { max-height: calc(100vh - 16px); }
   .modal-body { padding: 16px; }
